@@ -1,0 +1,21 @@
+{
+  "name": "ani-assistente",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Assistente de voz open source para estudar com o ANI-9, usando a sua própria assinatura de IA.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "pnpm -r check",
+    "test": "pnpm -r test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "3.9.9"
+  }
+}

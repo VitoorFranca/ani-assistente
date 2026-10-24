@@ -1,0 +1,30 @@
+{
+  "name": "@ani-assistente/ani-mcp",
+  "version": "0.1.0",
+  "description": "Servidor MCP do ANI-9: baralhos, cartões, estatísticas, cadernos, roadmaps e tarefas, pela API com um token pessoal.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "ani-mcp": "dist/index.js"
+  },
+  "main": "dist/server.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.0.2"
+  }
+}
