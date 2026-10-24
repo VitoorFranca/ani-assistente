@@ -1,0 +1,6 @@
+audio/
+data/
+models/
+bin/
+.build/
+

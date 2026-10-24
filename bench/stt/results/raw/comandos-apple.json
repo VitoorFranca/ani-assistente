@@ -1,0 +1,194 @@
+[
+  {
+    "file": "01-Luciana.wav",
+    "ref": "quantas revisões eu tenho hoje",
+    "hyp": "Quanto às revisões eu tenho hoje?",
+    "errors": 2,
+    "words": 5,
+    "ms": 52
+  },
+  {
+    "file": "02-Luciana.wav",
+    "ref": "como está a minha sequência de estudos",
+    "hyp": "Como está a minha sequência de estudos?",
+    "errors": 0,
+    "words": 7,
+    "ms": 56
+  },
+  {
+    "file": "03-Luciana.wav",
+    "ref": "cria um cartão no baralho fisiologia com a pergunta o que é potencial de ação",
+    "hyp": "Criar um cartão no baralho fisiologia com a pergunta o que é potencial de ação.",
+    "errors": 1,
+    "words": 15,
+    "ms": 72
+  },
+  {
+    "file": "04-Luciana.wav",
+    "ref": "anota na folha mitocôndria que a respiração celular acontece na matriz",
+    "hyp": "Anota na folha mitocôndria que a respiração do celular acontece na matriz.",
+    "errors": 1,
+    "words": 11,
+    "ms": 69
+  },
+  {
+    "file": "05-Luciana.wav",
+    "ref": "quais tarefas estão abertas",
+    "hyp": "Quais tarefas estão abertas?",
+    "errors": 0,
+    "words": 4,
+    "ms": 49
+  },
+  {
+    "file": "06-Luciana.wav",
+    "ref": "marca a tarefa de ler o capítulo três como concluída",
+    "hyp": "Marca a tarefa de ler o capítulo três como concluída.",
+    "errors": 0,
+    "words": 10,
+    "ms": 58
+  },
+  {
+    "file": "07-Luciana.wav",
+    "ref": "adiciona a tarefa revisar bioquímica até sexta feira",
+    "hyp": "Adiciona a tarefa revisar bioquímica até sexta-feira.",
+    "errors": 0,
+    "words": 8,
+    "ms": 59
+  },
+  {
+    "file": "08-Luciana.wav",
+    "ref": "lê o roadmap de back-end com go",
+    "hyp": "Leu vou de M de o endereço com voo.",
+    "errors": 7,
+    "words": 8,
+    "ms": 50
+  },
+  {
+    "file": "09-Luciana.wav",
+    "ref": "qual é o próximo tópico do meu roadmap",
+    "hyp": "Qual é o próximo tópico do meu roadmap?",
+    "errors": 0,
+    "words": 8,
+    "ms": 52
+  },
+  {
+    "file": "10-Luciana.wav",
+    "ref": "marca o tópico de concorrência como estudando",
+    "hyp": "Marca o tópico de concorrência como estudando.",
+    "errors": 0,
+    "words": 7,
+    "ms": 52
+  },
+  {
+    "file": "11-Luciana.wav",
+    "ref": "cria um caderno chamado anatomia do coração",
+    "hyp": "Criar um caderno chamado Anatomia do Coração.",
+    "errors": 1,
+    "words": 7,
+    "ms": 53
+  },
+  {
+    "file": "12-Luciana.wav",
+    "ref": "quantos cartões novos eu tenho no baralho medicina",
+    "hyp": "Quantos cartões novos eu tenho no baralho medicina?",
+    "errors": 0,
+    "words": 8,
+    "ms": 59
+  },
+  {
+    "file": "13-Luciana.wav",
+    "ref": "me diz as estatísticas da semana",
+    "hyp": "Me diz as estatísticas da semana.",
+    "errors": 0,
+    "words": 6,
+    "ms": 47
+  },
+  {
+    "file": "14-Luciana.wav",
+    "ref": "resume o caderno de biologia celular",
+    "hyp": "Resume o caderno de biologia celular.",
+    "errors": 0,
+    "words": 6,
+    "ms": 49
+  },
+  {
+    "file": "15-Luciana.wav",
+    "ref": "busca cartões sobre ciclo de krebs",
+    "hyp": "Busca cartões sobre ciclo de Krebs.",
+    "errors": 0,
+    "words": 6,
+    "ms": 47
+  },
+  {
+    "file": "16-Luciana.wav",
+    "ref": "qual baralho tem mais revisões atrasadas",
+    "hyp": "Qual baralho tem mais revisões atrasadas?",
+    "errors": 0,
+    "words": 6,
+    "ms": 47
+  },
+  {
+    "file": "17-Luciana.wav",
+    "ref": "cria uma folha chamada sistema nervoso no caderno de fisiologia",
+    "hyp": "Criar uma folha chamada sistema nervoso no caderno de fisiologia.",
+    "errors": 1,
+    "words": 10,
+    "ms": 56
+  },
+  {
+    "file": "18-Luciana.wav",
+    "ref": "usa o opus nisso e monta um plano de estudo para o fim de semana",
+    "hyp": "Usa o opus nisso e monta um plano de estudo para o fim de semana.",
+    "errors": 0,
+    "words": 15,
+    "ms": 58
+  },
+  {
+    "file": "19-Luciana.wav",
+    "ref": "lembra de revisar farmacologia amanhã às oito",
+    "hyp": "Lembrar de revisar farmacologia amanhã às oito.",
+    "errors": 1,
+    "words": 7,
+    "ms": 48
+  },
+  {
+    "file": "20-Luciana.wav",
+    "ref": "quantas tarefas eu concluí hoje",
+    "hyp": "Quanto às tarefas eu concluí hoje.",
+    "errors": 2,
+    "words": 5,
+    "ms": 42
+  },
+  {
+    "file": "21-Luciana.wav",
+    "ref": "abre o caderno de direito constitucional",
+    "hyp": "Abre o caderno de Direito Constitucional.",
+    "errors": 0,
+    "words": 6,
+    "ms": 46
+  },
+  {
+    "file": "22-Luciana.wav",
+    "ref": "lê a primeira folha do caderno leituras",
+    "hyp": "é a primeira folha do caderno leituras.",
+    "errors": 1,
+    "words": 7,
+    "ms": 48
+  },
+  {
+    "file": "23-Luciana.wav",
+    "ref": "quantos dias seguidos eu estudei",
+    "hyp": "Quantos dias seguidos eu estudei",
+    "errors": 0,
+    "words": 5,
+    "ms": 42
+  },
+  {
+    "file": "24-Luciana.wav",
+    "ref": "obrigado ani",
+    "hyp": "Obrigado a N",
+    "errors": 2,
+    "words": 2,
+    "ms": 36
+  }
+]

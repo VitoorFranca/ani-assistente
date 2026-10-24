@@ -9,9 +9,10 @@ O assistente **não tem custo de IA próprio**: cada pessoa usa a **própria**
 assinatura ou chave, num motor de IA que ela mesma instalou e em que ela mesma
 fez login. O primeiro motor é o Claude Code; outros entram como adaptadores.
 
-> **Estado:** em construção. Hoje funciona o servidor MCP do ANI-9
-> ([`packages/ani-mcp`](packages/ani-mcp)), que já dá para usar no seu
-> Claude Code. O app de voz vem a seguir. Veja o [plano](#plano).
+> **Estado:** primeira versão para testar no seu Mac (sem instalador ainda).
+> Funcionam o servidor MCP do ANI-9, o app de barra de menus com conversa por
+> texto e por voz, e as confirmações. Veja [como rodar](#rodar-o-app) e o
+> [plano](#plano).
 
 ## Como funciona
 
@@ -50,6 +51,23 @@ cartão, cadernos e folhas (ler, criar, anotar), roadmaps (ler, marcar
 progresso) e tarefas (listar, adicionar, concluir). As que mudam dados avisam
 o motor para confirmar com você antes.
 
+## Rodar o app
+
+Requisitos: macOS 26, Node 22+, pnpm, ferramentas de linha de comando do
+Xcode (Swift 6.2+) e o [Claude Code](https://code.claude.com) instalado, com
+login feito na sua conta.
+
+```bash
+pnpm install && pnpm build
+(cd native/voz && swift build -c release)   # a voz (opcional)
+pnpm -C packages/desktop start
+```
+
+O "Ani" aparece na barra de menus. Na primeira vez, cole o token do ANI-9.
+**⌥Espaço** abre o painel e começa a ouvir; na primeira vez com voz, o
+modelo de fala (cerca de 600 MB) é baixado e preparado, o que leva alguns
+minutos. O macOS pede permissão para o microfone.
+
 ## Regras deste projeto sobre assinaturas
 
 O projeto segue os [termos do Claude Code](https://code.claude.com/docs/en/legal-and-compliance):
@@ -72,10 +90,10 @@ valem os termos de cada fornecedor, conferidos antes de o adaptador entrar.
 2. ✅ Servidor MCP do ANI-9.
 3. Núcleo: interface de motor, adaptador do Claude Code, escolha de modelo,
    estimativa e limite de tokens, confirmação por código antes de mudar dados
-   e conversa pelo terminal (`packages/cli`). ✅ O núcleo; falta o app de
-   barra de menus.
-4. Voz: escolha do modelo de fala por comparação em pt-BR, atalho global,
-   síntese de voz; depois, "Ei, Ani".
+   conversa pelo terminal (`packages/cli`) e app de barra de menus. ✅
+4. Voz: modelo de fala escolhido por comparação em pt-BR
+   ([`bench/stt`](bench/stt/README.md)), atalho global, respostas e
+   confirmações faladas. ✅ Falta: "Ei, Ani", voz própria, instalador.
 5. Outros motores (chave de API; Cursor, depois de conferir os termos dele).
 
 ## Licença

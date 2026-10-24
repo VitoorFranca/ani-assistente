@@ -1,0 +1,73 @@
+{
+  "set": "comandos",
+  "utterances": 24,
+  "machine": "Apple M4",
+  "macos": "26.6.2",
+  "date": "2026-10-24",
+  "engines": [
+    {
+      "id": "apple",
+      "label": "Apple SpeechAnalyzer (pt-BR)",
+      "wer": 10.6,
+      "msP50": 51,
+      "msP95": 67,
+      "loadMs": 265,
+      "peakMb": 19,
+      "exact": 14,
+      "note": "Memória do modelo fica num serviço do macOS, fora desta medida."
+    },
+    {
+      "id": "parakeet-v3",
+      "label": "Parakeet TDT v3 (FluidAudio)",
+      "wer": 4.5,
+      "msP50": 40,
+      "msP95": 47,
+      "loadMs": 420,
+      "peakMb": 81,
+      "exact": 21
+    },
+    {
+      "id": "parakeet-ultra",
+      "label": "Parakeet Ultra (FluidAudio)",
+      "wer": 3.4,
+      "msP50": 41,
+      "msP95": 49,
+      "loadMs": 184242,
+      "peakMb": 672,
+      "exact": 22
+    },
+    {
+      "id": "whisper-turbo",
+      "label": "Whisper large-v3-turbo",
+      "wer": 2.2,
+      "msP50": 1207,
+      "msP95": 1246,
+      "loadMs": 379,
+      "peakMb": 1917,
+      "exact": 21,
+      "note": "Tempo por frase = total do whisper.cpp menos a carga do modelo (o app manteria o modelo carregado)."
+    },
+    {
+      "id": "whisper-turbo-q5",
+      "label": "Whisper large-v3-turbo q5_0",
+      "wer": 2.8,
+      "msP50": 1306,
+      "msP95": 1350,
+      "loadMs": 144,
+      "peakMb": 841,
+      "exact": 21,
+      "note": "Tempo por frase = total do whisper.cpp menos a carga do modelo (o app manteria o modelo carregado)."
+    },
+    {
+      "id": "whisper-small",
+      "label": "Whisper small",
+      "wer": 15.1,
+      "msP50": 339,
+      "msP95": 403,
+      "loadMs": 125,
+      "peakMb": 847,
+      "exact": 12,
+      "note": "Tempo por frase = total do whisper.cpp menos a carga do modelo (o app manteria o modelo carregado)."
+    }
+  ]
+}

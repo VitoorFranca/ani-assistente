@@ -215,3 +215,69 @@ describe("assistant", () => {
     }
   });
 });
+
+describe("warm sessions", () => {
+  function sessionEngine() {
+    const opened: { model?: string; resume?: string }[] = [];
+    const prompts: string[] = [];
+    const engine: Engine = {
+      id: "s",
+      label: "Sessões",
+      status: async () => ({ installed: true, version: "1", loggedIn: true, plan: "Pro", hint: null }),
+      login: async () => {},
+      models: () => [],
+      run: () => {
+        throw new Error("não deveria usar run");
+      },
+      openSession(options) {
+        opened.push({ model: options.model, resume: options.resumeSessionId });
+        let alive = true;
+        return {
+          async *send(prompt) {
+            prompts.push(prompt);
+            yield { type: "start", sessionId: "conversa", model: options.model ?? "" };
+            yield {
+              type: "done",
+              text: "ok",
+              sessionId: "conversa",
+              usage: usage(100),
+              costUsd: null,
+              durationMs: 1,
+              denied: [],
+            };
+          },
+          sessionId: () => "conversa",
+          alive: () => alive,
+          close: () => void (alive = false),
+        };
+      },
+    };
+    return { engine, opened, prompts };
+  }
+
+  it("reuses one process across requests and reopens it, resuming the conversation, when the model changes", async () => {
+    const { engine, opened, prompts } = sessionEngine();
+    const assistant = await createAssistant({
+      engine,
+      ani,
+      servers,
+      prompts: prompts_({}),
+      history: createMemoryHistory(),
+    });
+    try {
+      assistant.warm();
+      await collect(assistant.ask("Quantas revisões tenho?"));
+      await collect(assistant.ask("E tarefas?"));
+      expect(opened).toEqual([{ model: "haiku", resume: undefined }]);
+      await collect(assistant.ask("usa o opus nisso: e amanhã?"));
+      expect(opened[1]).toEqual({ model: "opus", resume: "conversa" });
+      expect(prompts).toEqual(["Quantas revisões tenho?", "E tarefas?", "e amanhã?"]);
+    } finally {
+      await assistant.close();
+    }
+  });
+});
+
+function prompts_(answers: Partial<Record<keyof PersonPrompts, boolean>>): PersonPrompts {
+  return prompts(answers, []);
+}

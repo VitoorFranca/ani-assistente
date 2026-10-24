@@ -74,6 +74,21 @@ export interface ModelOption {
   note: string;
 }
 
+/** Everything a run needs except the prompt: what stays fixed while a session lives. */
+export type SessionOptions = Omit<RunRequest, "prompt" | "signal">;
+
+/**
+ * A warm conversation: one engine process kept alive between requests, so
+ * only the first one pays the start-up. Optional; engines without it use run().
+ */
+export interface EngineSession {
+  send(prompt: string, signal?: AbortSignal): AsyncIterable<EngineEvent>;
+  /** The engine's conversation id, once known (to resume elsewhere). */
+  sessionId(): string | null;
+  alive(): boolean;
+  close(): void;
+}
+
 export interface Engine {
   id: string;
   label: string;
@@ -82,4 +97,5 @@ export interface Engine {
   login(): Promise<void>;
   models(): ModelOption[];
   run(request: RunRequest): AsyncIterable<EngineEvent>;
+  openSession?(options: SessionOptions): EngineSession;
 }

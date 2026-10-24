@@ -1,2 +1,6 @@
 pnpm-lock.yaml
 dist/
+.build/
+bench/stt/models/
+bench/stt/data/
+bench/stt/audio/

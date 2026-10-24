@@ -1,0 +1,28 @@
+{
+  "name": "@ani-assistente/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "App de barra de menus do assistente (macOS).",
+  "license": "MIT",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"sem testes ainda: protocolo e núcleo cobertos nos outros pacotes\"",
+    "start": "node build.mjs && electron .",
+    "prestart": "install-electron"
+  },
+  "dependencies": {
+    "@ani-assistente/core": "workspace:*",
+    "@ani-assistente/engines": "workspace:*",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@ani-assistente/ani-mcp": "workspace:*",
+    "@ani-assistente/app-mcp": "workspace:*",
+    "@types/node": "^22.0.0",
+    "electron": "44.7.0",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  }
+}

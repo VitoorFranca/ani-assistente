@@ -10,7 +10,14 @@ import {
   type Bridge,
   type Decision,
 } from "@ani-assistente/app-mcp";
-import { totalTokens, type Engine, type EngineEvent, type LimitWindow, type Usage } from "@ani-assistente/engines";
+import {
+  totalTokens,
+  type Engine,
+  type EngineEvent,
+  type EngineSession,
+  type LimitWindow,
+  type Usage,
+} from "@ani-assistente/engines";
 import { describeAction } from "./describe.js";
 import { describeLimits, describeTokens, estimatePlan, type Estimate, type RunHistory } from "./estimate.js";
 import { classifyRequest, modelOverride, SYSTEM_PROMPT, type RequestKind } from "./prompt.js";
@@ -129,6 +136,33 @@ export async function createAssistant(options: AssistantOptions) {
   chmodSync(mcpConfigPath, 0o600);
 
   const allowedTools = [...ANI_READ_TOOLS.map((tool) => `mcp__${ANI_SERVER}__${tool}`), PLAN_TOOL];
+  const fixed = { systemPrompt: SYSTEM_PROMPT, mcpConfigPath, allowedTools, approvalTool: APPROVAL_TOOL };
+
+  // A warm engine process kept between requests (when the engine offers it): only the first request pays the start-up.
+  let live: { model: string; session: EngineSession } | null = null;
+
+  function session(model: string): EngineSession | null {
+    if (!options.engine.openSession) return null;
+    if (live && live.session.alive() && live.model === model) return live.session;
+    live?.session.close();
+    live = { model, session: options.engine.openSession({ ...fixed, model, resumeSessionId: sessionId ?? undefined }) };
+    return live.session;
+  }
+
+  function stream(prompt: string, model: string, signal: AbortSignal): AsyncIterable<EngineEvent> {
+    const warm = session(model);
+    return warm
+      ? warm.send(prompt, signal)
+      : options.engine.run({ ...fixed, prompt, model, resumeSessionId: sessionId ?? undefined, signal });
+  }
+
+  function expireIfIdle() {
+    if (sessionId && now().getTime() - lastActivity > settings.sessionIdleMinutes * 60_000) {
+      sessionId = null;
+      live?.session.close();
+      live = null;
+    }
+  }
 
   /** One request from the person, possibly continued past its budget if they agree. */
   async function* ask(text: string, signal?: AbortSignal): AsyncIterable<AssistantEvent> {
@@ -136,7 +170,7 @@ export async function createAssistant(options: AssistantOptions) {
     const prompt = override?.text ?? text;
     const kind = classifyRequest(prompt);
     const model = override?.model ?? settings.models[kind];
-    if (sessionId && now().getTime() - lastActivity > settings.sessionIdleMinutes * 60_000) sessionId = null;
+    expireIfIdle();
     current = { model, plannedSteps: null };
     yield { type: "routed", kind, model };
 
@@ -153,16 +187,7 @@ export async function createAssistant(options: AssistantOptions) {
         let finished = false;
         let used = 0;
         try {
-          for await (const event of options.engine.run({
-            prompt: nextPrompt,
-            model,
-            resumeSessionId: sessionId ?? undefined,
-            systemPrompt: SYSTEM_PROMPT,
-            mcpConfigPath,
-            allowedTools,
-            approvalTool: APPROVAL_TOOL,
-            signal: run.signal,
-          })) {
+          for await (const event of stream(nextPrompt, model, run.signal)) {
             if (event.type === "start") sessionId = event.sessionId;
             if (event.type === "limits") lastLimits = event.windows;
             if (event.type === "usage") {
@@ -215,11 +240,21 @@ export async function createAssistant(options: AssistantOptions) {
 
   return {
     ask,
+    /** Start the engine ahead of a request (when the person starts talking), so it is ready when the text arrives. */
+    warm(kind: RequestKind = "rapido") {
+      expireIfIdle();
+      session(settings.models[kind]);
+    },
     /** Forget the conversation (the next request starts a new session). */
-    reset: () => void (sessionId = null),
+    reset() {
+      sessionId = null;
+      live?.session.close();
+      live = null;
+    },
     limits: () => lastLimits,
     settings: () => settings,
     async close() {
+      live?.session.close();
       await bridge.close();
       rmSync(configDir, { recursive: true, force: true });
     },

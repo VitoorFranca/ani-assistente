@@ -2,7 +2,15 @@ import { execFile, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 import { createClaudeStreamReader } from "./claudeStream.js";
-import type { Engine, EngineEvent, EngineStatus, ModelOption, RunRequest } from "./types.js";
+import type {
+  Engine,
+  EngineEvent,
+  EngineSession,
+  EngineStatus,
+  ModelOption,
+  RunRequest,
+  SessionOptions,
+} from "./types.js";
 
 // The Claude Code adapter. It runs the `claude` the person installed and
 // signed in to, unmodified, as a child process (docs/DECISIONS.md):
@@ -62,6 +70,30 @@ export function claudeArgs(request: RunRequest): string[] {
 function withoutApiKey(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const { ANTHROPIC_API_KEY: _key, ANTHROPIC_AUTH_TOKEN: _token, ...rest } = env;
   return rest;
+}
+
+/** The same lean command line, reading requests from stdin (one process for many requests). */
+export function claudeSessionArgs(options: SessionOptions): string[] {
+  const args = claudeArgs({ ...options, prompt: "" });
+  args.splice(0, 2, "-p", "--input-format", "stream-json");
+  return args;
+}
+
+/** A tiny async queue: events pushed by the process, pulled by the current request. */
+function channel<T>() {
+  const items: T[] = [];
+  let wake: (() => void) | null = null;
+  return {
+    push(item: T) {
+      items.push(item);
+      wake?.();
+      wake = null;
+    },
+    async next(): Promise<T> {
+      while (!items.length) await new Promise<void>((resolve) => (wake = resolve));
+      return items.shift()!;
+    },
+  };
 }
 
 export function createClaudeCodeEngine(options: ClaudeCodeOptions = {}): Engine {
@@ -162,5 +194,85 @@ export function createClaudeCodeEngine(options: ClaudeCodeOptions = {}): Engine 
     }
   }
 
-  return { id: "claude-code", label: "Claude Code", status, login, models: () => MODELS, run: runOnce };
+  function openSession(options: SessionOptions): EngineSession {
+    const child = spawn(command, claudeSessionArgs(options), {
+      cwd: options.cwd,
+      stdio: ["pipe", "pipe", "pipe"],
+      env: withoutApiKey(process.env),
+    });
+    let alive = true;
+    let busy = false;
+    let sessionId: string | null = options.resumeSessionId ?? null;
+    let stderr = "";
+    let reader = createClaudeStreamReader();
+    let turn: ReturnType<typeof channel<EngineEvent | null>> | null = null;
+    const pendingStart: EngineEvent[] = [];
+
+    child.stderr.on("data", (chunk) => (stderr = (stderr + chunk).slice(-4000)));
+    const finish = () => {
+      alive = false;
+      turn?.push(null);
+    };
+    child.on("close", finish);
+    child.on("error", finish);
+    createInterface({ input: child.stdout }).on("line", (line) => {
+      for (const event of reader.read(line)) {
+        if (event.type === "start") sessionId = event.sessionId;
+        if (event.type === "done") sessionId = event.sessionId;
+        if (turn) turn.push(event);
+        else if (event.type === "start") pendingStart.push(event);
+      }
+    });
+
+    async function* send(prompt: string, signal?: AbortSignal): AsyncIterable<EngineEvent> {
+      if (!alive) {
+        yield { type: "error", kind: "failed", message: "A sessão do Claude Code terminou." };
+        return;
+      }
+      if (busy) throw new Error("A sessão já está respondendo.");
+      busy = true;
+      reader = createClaudeStreamReader(); // usage counts per request
+      const queue = channel<EngineEvent | null>();
+      turn = queue;
+      for (const event of pendingStart.splice(0)) queue.push(event);
+      // Interrupting a request ends the process; the next request resumes the conversation in a new one.
+      const onAbort = () => {
+        queue.push({ type: "error", kind: "aborted", message: "Interrompido." });
+        child.kill("SIGINT");
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+      try {
+        child.stdin.write(`${JSON.stringify({ type: "user", message: { role: "user", content: prompt } })}\n`);
+        for (;;) {
+          const event = await queue.next();
+          if (event === null) {
+            const message = /log ?in|authenticat|unauthori/i.test(stderr)
+              ? "Faça login no Claude Code com a sua conta."
+              : stderr.trim().split("\n").at(-1) || "O Claude Code encerrou.";
+            yield { type: "error", kind: /log ?in|authenticat/i.test(stderr) ? "not_logged_in" : "failed", message };
+            return;
+          }
+          yield event;
+          if (event.type === "done" || event.type === "error") return;
+        }
+      } finally {
+        signal?.removeEventListener("abort", onAbort);
+        turn = null;
+        busy = false;
+      }
+    }
+
+    return {
+      send,
+      sessionId: () => sessionId,
+      alive: () => alive,
+      close() {
+        alive = false;
+        child.stdin.end();
+        child.kill("SIGTERM");
+      },
+    };
+  }
+
+  return { id: "claude-code", label: "Claude Code", status, login, models: () => MODELS, run: runOnce, openSession };
 }

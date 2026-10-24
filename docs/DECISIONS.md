@@ -128,19 +128,60 @@ Implementados no ANI-9 para este projeto:
   revogado a qualquer momento e nunca gerencia outros tokens.
 - O app guarda o token nas Chaves do macOS (fase 3).
 
-## Voz (a medir)
+## Voz: Parakeet Ultra, num processo nativo
 
-A base de comparação é o [spokemark](https://github.com/VitoorFranca/spokemark),
-que mediu motores de reconhecimento no mesmo Mac. O padrão dele (Parakeet
-Nemotron Streaming) só reconhece inglês. O assistente recebe comandos curtos em
-português e precisa acertar o pedido depois que a pessoa para de falar, então
-modelos que transcrevem a frase inteira de uma vez, descartados lá, voltam a
-concorrer aqui:
+**Escolhido:** `native/voz`, um executável Swift com o FluidAudio (Apache-2.0,
+mesmo commit do spokemark): microfone (AVAudioEngine) → Silero VAD (fim da
+fala com 600 ms de silêncio) → **Parakeet Ultra** → texto. A fala usa as vozes
+pt-BR do macOS (a melhor instalada).
 
-- Parakeet TDT v3 (multilíngue, pelo FluidAudio);
-- Apple SpeechAnalyzer (sem download; conferir pt-BR em `supportedLocales`);
-- Whisper large-v3-turbo.
+Comparação completa em [`bench/stt`](../bench/stt/README.md). Resumo (MacBook
+Air M4, FLEURS pt_br com 100 frases e 24 comandos):
 
-A escolha sai de medições em pt-BR: erro por palavra, tempo entre o fim da
-fala e o texto pronto, memória e CPU/GPU. A voz falada passa pelo mesmo
-processo (Kokoro e PocketTTS do FluidAudio, Piper, vozes do macOS).
+| Motor                  | Erro FLEURS | Erro comandos | Tempo por frase |
+| ---------------------- | ----------- | ------------- | --------------- |
+| Parakeet Ultra         | 4,4%        | 3,4%          | 63 ms           |
+| Whisper large-v3-turbo | 3,6%        | 2,2%          | 1,9 s           |
+| Apple SpeechAnalyzer   | 5,9%        | 10,6%         | 93 ms           |
+
+- O Whisper turbo erra cerca de 1 ponto a menos, mas é 30 vezes mais lento e
+  usa GPU e até 1,9 GB. No assistente, a espera depois de falar pesa mais.
+- O padrão do spokemark (Nemotron Streaming) só reconhece inglês; o Parakeet
+  TDT, descartado lá por ser em bloco, é o certo aqui: o assistente
+  transcreve a frase inteira depois do fim da fala.
+- Medido no próprio `voz` (arquivo no ritmo real, mesmo caminho do
+  microfone): 120–132 ms entre o fim da fala e o texto.
+- Ponto fraco: termos em inglês ("back-end com Go"). A testar: vocabulário
+  personalizado do FluidAudio.
+- A voz própria (Kokoro, PocketTTS) entra depois de medir naturalidade em
+  pt-BR; o README do FluidAudio é contraditório sobre o suporte a português.
+
+## Sessão viva: o motor aquece enquanto a pessoa fala
+
+O `claude -p` com `--input-format stream-json` fica aberto e recebe um pedido
+por linha. Medido em 24/10/2026 (haiku, servidor MCP do ANI-9 local):
+
+|                                          | Um processo por pedido | Sessão viva |
+| ---------------------------------------- | ---------------------- | ----------- |
+| Primeiro pedido (inclui ~1 s de partida) | 2,9–5,4 s              | 3,8 s       |
+| Pedido seguinte com consulta ao ANI-9    | 2,9–5,4 s              | 2,5 s       |
+| Pedido sem consulta                      | —                      | 1,4 s       |
+
+O app abre a sessão quando o painel abre ou o atalho é pressionado; abrir
+não envia nada ao modelo. Interromper um pedido encerra o processo; o
+próximo pedido retoma a mesma conversa (`--resume`) num processo novo.
+Trocar de modelo também abre outro processo, retomando a conversa.
+
+## App: Electron na barra de menus
+
+Mesmas escolhas do spokemark, já validadas no mesmo Mac: Electron 44,
+esbuild, IPC validado com zod nos dois lados, painel `type: "panel"`. O
+painel é TypeScript sem framework (é pequeno; menos dependências). O token do
+ANI-9 fica cifrado com `safeStorage` (chave nas Chaves do macOS). Os dois
+servidores MCP vão empacotados num arquivo cada e rodam com o próprio
+Electron em modo Node (`ELECTRON_RUN_AS_NODE`).
+
+Teste de ponta a ponta (Playwright para Electron, ANI-9 local): configuração,
+token, pergunta, pedido com confirmação ("Anotar a tarefa …?" → Sim → tarefa
+criada), ajustes. Sem erros. O microfone não foi exercitado no teste
+automático (exige a permissão do macOS e uma pessoa falando).

@@ -123,3 +123,47 @@ describe("Claude Code engine", () => {
     }
   });
 });
+
+describe("warm session", () => {
+  it("answers several requests from one process, each with its own usage", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "engine-"));
+    process.env.FAKE_CLAUDE_ARGS = join(dir, "args.jsonl");
+    process.env.FAKE_CLAUDE_INPUTS = join(dir, "inputs.txt");
+    try {
+      const session = createClaudeCodeEngine({ command: fake }).openSession!(request);
+      const first = await collect(session.send("primeira"));
+      const second = await collect(session.send("segunda"));
+      expect(first[0]).toMatchObject({ type: "start" });
+      expect(second.find((e) => e.type === "start")).toBeUndefined();
+      const tokens = (events: EngineEvent[]) => {
+        const done = events.find((e) => e.type === "done");
+        return done?.type === "done" ? totalTokens(done.usage) : 0;
+      };
+      expect(tokens(second)).toBe(tokens(first));
+      expect(session.sessionId()).toBe("efd218a8-47a9-4346-9338-5ac08becc56b");
+      expect(readFileSync(process.env.FAKE_CLAUDE_INPUTS, "utf8")).toBe("primeira\nsegunda\n");
+      // One process for both requests, in stream-json input mode, never --bare.
+      const runs = readFileSync(process.env.FAKE_CLAUDE_ARGS, "utf8")
+        .trim()
+        .split("\n")
+        .map((l) => JSON.parse(l));
+      expect(runs).toHaveLength(1);
+      expect(runs[0].args).toEqual(expect.arrayContaining(["--input-format", "stream-json"]));
+      expect(runs[0].args).not.toContain("--bare");
+      session.close();
+    } finally {
+      delete process.env.FAKE_CLAUDE_ARGS;
+      delete process.env.FAKE_CLAUDE_INPUTS;
+    }
+  });
+
+  it("ends the process when a request is interrupted", async () => {
+    const session = createClaudeCodeEngine({ command: fake }).openSession!(request);
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 200);
+    const events = await collect(session.send("pendura", controller.signal));
+    expect(events.at(-1)).toEqual({ type: "error", kind: "aborted", message: "Interrompido." });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(session.alive()).toBe(false);
+  });
+});
