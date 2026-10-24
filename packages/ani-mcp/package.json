@@ -7,7 +7,7 @@
   "bin": {
     "ani-mcp": "dist/index.js"
   },
-  "main": "dist/server.js",
+  "main": "dist/lib.js",
   "files": [
     "dist"
   ],
@@ -26,5 +26,12 @@
     "tsx": "4.23.15",
     "typescript": "7.0.2",
     "vitest": "5.0.2"
+  },
+  "types": "dist/lib.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/lib.d.ts",
+      "default": "./dist/lib.js"
+    }
   }
 }

@@ -36,6 +36,53 @@ estudo não precisa deles. A configuração enxuta é o padrão do adaptador.
 
 Medição única, sem repetição; serve para a ordem de grandeza.
 
+## Confirmação antes de mudar dados: por código, não por instrução
+
+**Escolhido:** a ferramenta de aprovação do próprio Claude Code
+(`--permission-prompt-tool`). Só as ferramentas de leitura do ANI-9 rodam
+sem perguntar (`--allowedTools`); qualquer outra chamada vai para
+`mcp__app__aprovar`, um servidor MCP pequeno (`packages/app-mcp`) que pergunta
+ao app e devolve a decisão da pessoa.
+
+- Contrato verificado em 24/10/2026 (Claude Code 2.1.300): a ferramenta
+  recebe `{ tool_name, input, tool_use_id }` e responde
+  `{ "behavior": "allow", "updatedInput" }` ou
+  `{ "behavior": "deny", "message" }`. Com "deny", nada mudou no ANI-9; com
+  "allow", a tarefa foi criada.
+- Uma instrução no prompt ("pergunte antes de criar") falha de vez em quando;
+  a aprovação por código não deixa a ação passar sem resposta.
+- O servidor de aprovação fala com o app por um socket Unix numa pasta 0700,
+  com um segredo por sessão. Se o app não responde, a resposta é "recusar".
+- Tarefas longas: o modelo chama `confirmar_plano` com os passos; o app
+  calcula a estimativa e pergunta. Como reforço, cada execução tem um limite
+  de tokens: ao passar dele, o app para e pergunta se continua (a mesma
+  sessão é retomada).
+
+## Limites da assinatura
+
+A saída do `claude -p` traz um evento `rate_limit_event` com a fração usada
+das janelas de 5 horas e da semana e quando elas recomeçam. O assistente usa
+isso para dizer "você já usou 30% da janela de 5 horas" junto da estimativa.
+
+## Teste de ponta a ponta (terminal)
+
+`packages/cli` usa o mesmo núcleo do app, sem voz. Medido em 24/10/2026
+contra o ANI-9 local, Claude Code 2.1.300, assinatura Pro:
+
+| Fala                                                | Modelo  | Ferramenta             | Tempo     | Tokens  |
+| --------------------------------------------------- | ------- | ---------------------- | --------- | ------- |
+| "Quantas revisões eu tenho hoje?"                   | haiku   | `ani_resumo_do_dia`    | 2,9–6,3 s | ~10 mil |
+| "Anota a tarefa de revisar o caderno…" (confirmada) | sonnet* | `ani_adicionar_tarefa` | 3,5 s     | ~11 mil |
+| "Quais tarefas estão abertas?"                      | haiku   | `ani_listar_tarefas`   | 3,7 s     | ~11 mil |
+
+\* Corrigido depois: ações únicas ("anota", "marca", "cria um cartão") vão
+para o modelo rápido.
+
+A conversa continua entre falas (`--resume`), mesmo trocando de modelo. A
+maior parte do tempo é partida: cada fala inicia o Claude Code e os dois
+servidores MCP. Próximo passo: manter um processo vivo entre falas
+(`--input-format stream-json`) e medir de novo.
+
 ## Ferramentas do ANI-9: servidor MCP local (stdio)
 
 **Escolhido:** `packages/ani-mcp`, um servidor MCP que o motor inicia e com

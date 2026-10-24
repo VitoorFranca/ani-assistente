@@ -10,10 +10,11 @@
     "node": ">=22"
   },
   "scripts": {
-    "check": "pnpm -r check",
+    "check": "pnpm -r build && pnpm -r check",
     "test": "pnpm -r test",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "build": "pnpm -r build"
   },
   "devDependencies": {
     "prettier": "3.9.9"

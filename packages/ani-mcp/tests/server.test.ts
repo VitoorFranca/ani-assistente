@@ -2,7 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
 import { AniError, type AniClient } from "../src/client.js";
-import { createAniMcpServer } from "../src/server.js";
+import { ANI_READ_TOOLS, createAniMcpServer } from "../src/server.js";
 
 async function connect(client: AniClient) {
   const server = createAniMcpServer({ client });
@@ -47,6 +47,12 @@ describe("MCP server", () => {
       "ani_marcar_progresso_roadmap",
       "ani_resumo_do_dia",
     ]);
+    expect(
+      tools
+        .filter((t) => t.annotations?.readOnlyHint === true)
+        .map((t) => t.name)
+        .sort(),
+    ).toEqual([...ANI_READ_TOOLS].sort());
     for (const tool of tools) {
       const writes = tool.annotations?.readOnlyHint === false;
       expect(tool.description!.includes("confirme com a pessoa"), tool.name).toBe(writes);

@@ -6,6 +6,21 @@ import { createOperations, ResolutionError } from "./operations.js";
 export const SERVER_NAME = "ani9";
 export const SERVER_VERSION = "0.1.0";
 
+/** Tools that only read: an app may let them run without asking. The test keeps this list in sync with the annotations. */
+export const ANI_READ_TOOLS = [
+  "ani_conta",
+  "ani_resumo_do_dia",
+  "ani_estatisticas",
+  "ani_listar_baralhos",
+  "ani_buscar_cartoes",
+  "ani_listar_cadernos",
+  "ani_ler_caderno",
+  "ani_ler_folha",
+  "ani_listar_roadmaps",
+  "ani_ler_roadmap",
+  "ani_listar_tarefas",
+] as const;
+
 const WRITES = "Muda dados no ANI-9: confirme com a pessoa antes de chamar.";
 
 type ToolResult = { content: { type: "text"; text: string }[]; isError?: boolean };

@@ -70,8 +70,10 @@ valem os termos de cada fornecedor, conferidos antes de o adaptador entrar.
 
 1. ✅ Tokens de acesso pessoais no ANI-9.
 2. ✅ Servidor MCP do ANI-9.
-3. Núcleo do app: interface de motor, adaptador do Claude Code, escolha de
-   modelo, estimativa de tokens com confirmação, conversa por texto.
+3. Núcleo: interface de motor, adaptador do Claude Code, escolha de modelo,
+   estimativa e limite de tokens, confirmação por código antes de mudar dados
+   e conversa pelo terminal (`packages/cli`). ✅ O núcleo; falta o app de
+   barra de menus.
 4. Voz: escolha do modelo de fala por comparação em pt-BR, atalho global,
    síntese de voz; depois, "Ei, Ani".
 5. Outros motores (chave de API; Cursor, depois de conferir os termos dele).

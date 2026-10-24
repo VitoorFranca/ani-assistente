@@ -1,0 +1,25 @@
+{
+  "name": "@ani-assistente/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Conversa com o assistente pelo terminal: o mesmo núcleo do app, sem voz.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "ani-chat": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"sem testes: coberto pelo núcleo\"",
+    "chat": "node dist/main.js"
+  },
+  "dependencies": {
+    "@ani-assistente/core": "workspace:*",
+    "@ani-assistente/engines": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "7.0.2"
+  }
+}
