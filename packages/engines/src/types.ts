@@ -51,6 +51,8 @@ export interface RunRequest {
   mcpConfigPath: string;
   /** Tools that run without asking. Everything else goes to the approval tool. */
   allowedTools: string[];
+  /** The engine's own tools to offer (such as web search); none when absent, for a lean context. */
+  builtinTools?: string[];
   /** MCP tool that approves or denies every other tool call (deterministic confirmation). */
   approvalTool?: string;
   cwd?: string;

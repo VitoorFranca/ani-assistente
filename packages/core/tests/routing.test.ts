@@ -15,6 +15,16 @@ describe("routing", () => {
     expect(classifyRequest("Monta um plano de estudo para o roadmap de Go")).toBe("tarefa");
   });
 
+  it("sends creating or revising a roadmap itself to the roadmap route, not studying one", () => {
+    expect(classifyRequest("Cria um roadmap de química orgânica para o vestibular")).toBe("roadmap");
+    expect(classifyRequest("Ani, monta uma trilha de estudo de violão")).toBe("roadmap");
+    expect(classifyRequest("Revisa o roadmap de Go do catálogo")).toBe("roadmap");
+    expect(classifyRequest("Melhora esse roadmap e abre o pull request")).toBe("roadmap");
+    expect(classifyRequest("Qual o próximo tópico do roadmap de Go?")).toBe("rapido");
+    expect(classifyRequest("Marca o tópico de goroutines do roadmap como feito")).toBe("rapido");
+    expect(classifyRequest("Estuda o roadmap de Go comigo passo a passo")).toBe("tarefa");
+  });
+
   it("honors a model named in the request and removes the instruction", () => {
     expect(modelOverride("usa o opus nisso: resume o caderno de Fisiologia")).toEqual({
       model: "opus",
@@ -26,6 +36,10 @@ describe("routing", () => {
 });
 
 describe("estimates", () => {
+  it("expects roadmap steps to cost much more (they research and open many pages)", () => {
+    expect(estimatePlan([], 2, "sonnet", "roadmap")).toEqual({ low: 80_000, high: 240_000, basis: "padrão" });
+  });
+
   it("uses a default range until there is history, then the history of the same model", () => {
     expect(estimatePlan([], 3, "sonnet")).toEqual({ low: 18_000, high: 45_000, basis: "padrão" });
     const history: RunRecord[] = [10_000, 12_000, 14_000, 16_000].map((perStep, i) => ({

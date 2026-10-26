@@ -241,3 +241,25 @@ Teste de ponta a ponta (Playwright para Electron, ANI-9 local): configuração,
 token, pergunta, pedido com confirmação ("Anotar a tarefa …?" → Sim → tarefa
 criada), ajustes. Sem erros. O microfone não foi exercitado no teste
 automático (exige a permissão do macOS e uma pessoa falando).
+
+## Roadmaps do catálogo pelo assistente
+
+Pedidos como "cria um roadmap de química" vão para uma rota própria
+(`roadmap`), com conversa separada das outras:
+
+- **Regras num lugar só.** O servidor `roadmaps` clona o catálogo público e
+  devolve a skill `criar-roadmap`, as referências e o formato que estão lá. O
+  assistente não tem uma cópia das regras: melhorou a skill, melhorou o
+  assistente.
+- **Pesquisa só onde precisa.** WebSearch e WebFetch (ferramentas do próprio
+  Claude Code) só entram nessa rota; os pedidos do dia a dia continuam com o
+  contexto enxuto.
+- **Validação pelo script do catálogo**, com o título real de cada página ao
+  lado do nome da fonte, até "Sem erros.".
+- **Publicar sempre pergunta.** Ler, rascunhar e validar rodam direto (nada sai
+  do computador); `roadmap_abrir_pr` passa pela confirmação. O pull request usa
+  o `gh` da pessoa (o git pede a credencial ao gh só naquele comando; nenhuma
+  configuração global muda) e, sem permissão de escrita, vai por um fork.
+- **Orçamento maior** (800 mil tokens por padrão) e estimativa por passo
+  própria (40 a 120 mil), porque cada passo abre muitas páginas. O plano é
+  confirmado antes de começar.

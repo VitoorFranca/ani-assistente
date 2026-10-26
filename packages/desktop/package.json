@@ -21,6 +21,7 @@
   "devDependencies": {
     "@ani-assistente/ani-mcp": "workspace:*",
     "@ani-assistente/app-mcp": "workspace:*",
+    "@ani-assistente/roadmaps-mcp": "workspace:*",
     "@types/node": "^22.0.0",
     "electron": "44.7.0",
     "esbuild": "0.28.2",

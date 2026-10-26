@@ -41,6 +41,14 @@ await Promise.all([
   }),
   build({
     ...common,
+    entryPoints: ["../roadmaps-mcp/src/index.ts"],
+    outfile: "dist/mcp/roadmaps.mjs",
+    platform: "node",
+    format: "esm",
+    banner: { js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);" },
+  }),
+  build({
+    ...common,
     entryPoints: ["../app-mcp/src/main.ts"],
     outfile: "dist/mcp/app.mjs",
     platform: "node",

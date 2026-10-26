@@ -26,6 +26,24 @@ function fromLoginShell(): Promise<string | null> {
   );
 }
 
+/**
+ * The login shell's PATH, added to the app's own, so the programs the
+ * assistant runs (git, gh for roadmap pull requests) are found as in the terminal.
+ */
+export function adoptLoginPath(): Promise<void> {
+  const shell = process.env.SHELL || "/bin/zsh";
+  return new Promise((resolve) =>
+    execFile(shell, ["-l", "-c", 'printf "%s" "$PATH"'], { timeout: 10_000 }, (error, stdout) => {
+      const login = stdout.trim().split("\n").at(-1) ?? "";
+      if (!error && login.includes("/")) {
+        const parts = [...login.split(":"), ...(process.env.PATH ?? "").split(":")].filter(Boolean);
+        process.env.PATH = [...new Set(parts)].join(":");
+      }
+      resolve();
+    }),
+  );
+}
+
 export async function findClaude(): Promise<string> {
   const override = process.env.ANI_CLAUDE_PATH;
   if (override && executable(override)) return override;

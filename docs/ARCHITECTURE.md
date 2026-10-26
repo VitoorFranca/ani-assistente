@@ -22,17 +22,18 @@
 
 ## Pacotes
 
-| Pacote             | O que faz                                                                                         |
-| ------------------ | ------------------------------------------------------------------------------------------------- |
-| `packages/ani-mcp` | O ANI-9 como servidor MCP (stdio): leitura e escritas confirmadas. Usável sozinho no Claude Code. |
-| `packages/engines` | A interface de motor e o adaptador do Claude Code (processo por pedido ou sessão viva).           |
-| `packages/app-mcp` | Aprovação de ações e de planos: o motor pergunta, o app responde com a decisão da pessoa.         |
-| `packages/core`    | A conversa: modelo por tipo de pedido, estimativa e limite de tokens, frases de confirmação.      |
-| `packages/cli`     | Conversa pelo terminal com o mesmo núcleo (testes de ponta a ponta).                              |
-| `packages/desktop` | O app de barra de menus: painel, atalho global, voz, ajustes.                                     |
-| `native/voz`       | Ouvir e falar, num processo nativo.                                                               |
-| `bench/stt`        | Comparação de reconhecimento de fala em pt-BR que escolheu o motor de `voz`.                      |
-| `bench/tts`        | Comparação das vozes que respondem (macOS, Supertonic 3, PocketTTS…) em pt-BR.                    |
+| Pacote                  | O que faz                                                                                                                    |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `packages/ani-mcp`      | O ANI-9 como servidor MCP (stdio): leitura e escritas confirmadas. Usável sozinho no Claude Code.                            |
+| `packages/engines`      | A interface de motor e o adaptador do Claude Code (processo por pedido ou sessão viva).                                      |
+| `packages/app-mcp`      | Aprovação de ações e de planos: o motor pergunta, o app responde com a decisão da pessoa.                                    |
+| `packages/roadmaps-mcp` | O catálogo público de roadmaps: regras atuais, rascunho validado pelo script do catálogo e pull request pelo `gh` da pessoa. |
+| `packages/core`         | A conversa: modelo por tipo de pedido, estimativa e limite de tokens, frases de confirmação.                                 |
+| `packages/cli`          | Conversa pelo terminal com o mesmo núcleo (testes de ponta a ponta).                                                         |
+| `packages/desktop`      | O app de barra de menus: painel, atalho global, voz, ajustes.                                                                |
+| `native/voz`            | Ouvir e falar, num processo nativo.                                                                                          |
+| `bench/stt`             | Comparação de reconhecimento de fala em pt-BR que escolheu o motor de `voz`.                                                 |
+| `bench/tts`             | Comparação das vozes que respondem (macOS, Supertonic 3, PocketTTS…) em pt-BR.                                               |
 
 ## Um pedido, do atalho à resposta
 

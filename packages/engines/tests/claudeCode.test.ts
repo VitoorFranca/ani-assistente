@@ -64,6 +64,9 @@ describe("Claude Code engine", () => {
     const args = claudeArgs({ ...request, resumeSessionId: "abc" });
     expect(args).not.toContain("--bare");
     expect(args.slice(args.indexOf("--tools"), args.indexOf("--tools") + 2)).toEqual(["--tools", ""]);
+    // Built-in tools only when asked for (web research for roadmaps).
+    const web = claudeArgs({ ...request, builtinTools: ["WebSearch", "WebFetch"] });
+    expect(web.slice(web.indexOf("--tools"), web.indexOf("--tools") + 2)).toEqual(["--tools", "WebSearch,WebFetch"]);
     expect(args.slice(args.indexOf("--allowedTools"), args.indexOf("--allowedTools") + 2)).toEqual([
       "--allowedTools",
       "mcp__ani9__ani_listar_tarefas,mcp__ani9__ani_conta",

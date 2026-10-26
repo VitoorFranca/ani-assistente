@@ -3,7 +3,9 @@
 Assistente de voz **open source** para estudar com o [ANI-9](https://www.ani9.online),
 no Mac. Você fala, ele responde com voz própria e age no ANI-9: diz o que tem
 para revisar, lê estatísticas, cria cartões, cadernos e anotações, lê roadmaps
-e cuida das suas tarefas.
+e cuida das suas tarefas. Também **cria e revisa roadmaps do
+[catálogo público](https://github.com/VitoorFranca/ani9-roadmaps)** e, se você
+confirmar, abre o pull request lá com o seu `gh`.
 
 O assistente **não tem custo de IA próprio**: cada pessoa usa a **própria**
 assinatura ou chave, num motor de IA que ela mesma instalou e em que ela mesma
@@ -28,6 +30,10 @@ fez login. O primeiro motor é o Claude Code; outros entram como adaptadores.
   status, login (pelo fluxo do próprio fornecedor), executar e devolver eventos.
 - **Ferramentas do ANI-9 num servidor MCP:** escritas uma vez, funcionam em
   qualquer motor que fale MCP.
+- **Roadmaps do catálogo:** "cria um roadmap de …" segue as regras do próprio
+  catálogo (a skill criar-roadmap), pesquisa na web, valida com o script do
+  catálogo e só publica (pull request) com a sua confirmação. Precisa de `git`
+  e, para publicar, do [GitHub CLI](https://cli.github.com) com o seu login.
 - **Sua conta do ANI-9:** um token pessoal, gerado em Configurações →
   Integrações. O app nunca pede a sua senha.
 

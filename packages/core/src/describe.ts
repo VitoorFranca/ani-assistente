@@ -29,6 +29,8 @@ export function describeAction(tool: string, input: unknown): string {
       return `Anotar a tarefa ${quote(field(input, "tarefa"))}?`;
     case "ani_concluir_tarefa":
       return `Marcar a tarefa ${quote(field(input, "tarefa"))} como concluída?`;
+    case "roadmap_abrir_pr":
+      return `Abrir um pull request público com o roadmap ${quote(field(input, "chave"))} no catálogo do ANI-9?`;
     default:
       return `Permitir a ação ${name.replace(/_/g, " ")}?`;
   }

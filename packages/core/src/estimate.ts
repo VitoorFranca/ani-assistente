@@ -27,6 +27,8 @@ export interface Estimate {
 }
 
 const DEFAULT_PER_STEP = { low: 6_000, high: 15_000 };
+/** A roadmap step researches and opens many pages: measured in the tens of thousands. */
+const ROADMAP_PER_STEP = { low: 40_000, high: 120_000 };
 const MIN_HISTORY = 3;
 
 function quantile(sorted: number[], q: number): number {
@@ -36,13 +38,14 @@ function quantile(sorted: number[], q: number): number {
   return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (index - lo);
 }
 
-/** Tokens per step from past planned runs (same model when possible), as a p25–p75 range. */
-export function estimatePlan(history: RunRecord[], steps: number, model: string): Estimate {
-  const planned = history.filter((r) => r.steps && r.steps > 0);
+/** Tokens per step from past planned runs (same kind, and same model when possible), as a p25–p75 range. */
+export function estimatePlan(history: RunRecord[], steps: number, model: string, kind?: RequestKind): Estimate {
+  const planned = history.filter((r) => r.steps && r.steps > 0 && (kind !== "roadmap" || r.kind === "roadmap"));
   const sameModel = planned.filter((r) => r.model === model);
   const sample = (sameModel.length >= MIN_HISTORY ? sameModel : planned).map((r) => r.tokens / r.steps!);
   if (sample.length < MIN_HISTORY) {
-    return { low: steps * DEFAULT_PER_STEP.low, high: steps * DEFAULT_PER_STEP.high, basis: "padrão" };
+    const range = kind === "roadmap" ? ROADMAP_PER_STEP : DEFAULT_PER_STEP;
+    return { low: steps * range.low, high: steps * range.high, basis: "padrão" };
   }
   const sorted = [...sample].sort((a, b) => a - b);
   return {

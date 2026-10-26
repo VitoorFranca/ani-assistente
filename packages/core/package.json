@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@ani-assistente/ani-mcp": "workspace:*",
+    "@ani-assistente/roadmaps-mcp": "workspace:*",
     "@ani-assistente/app-mcp": "workspace:*",
     "@ani-assistente/engines": "workspace:*"
   },

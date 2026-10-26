@@ -2,6 +2,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ANI_READ_TOOLS, SERVER_NAME as ANI_SERVER } from "@ani-assistente/ani-mcp";
+import { ROADMAP_READ_TOOLS, SERVER_NAME as ROADMAPS_SERVER } from "@ani-assistente/roadmaps-mcp";
 import {
   APP_SERVER_NAME,
   APPROVAL_TOOL,
@@ -15,12 +16,13 @@ import {
   type Engine,
   type EngineEvent,
   type EngineSession,
+  type SessionOptions,
   type LimitWindow,
   type Usage,
 } from "@ani-assistente/engines";
 import { describeAction } from "./describe.js";
 import { describeLimits, describeTokens, estimatePlan, type Estimate, type RunHistory } from "./estimate.js";
-import { classifyRequest, modelOverride, SYSTEM_PROMPT, type RequestKind } from "./prompt.js";
+import { classifyRequest, modelOverride, ROADMAP_PROMPT, SYSTEM_PROMPT, type RequestKind } from "./prompt.js";
 
 export interface AssistantSettings {
   /** Model per kind of request (engine names or aliases). */
@@ -32,8 +34,9 @@ export interface AssistantSettings {
 }
 
 export const DEFAULT_SETTINGS: AssistantSettings = {
-  models: { rapido: "haiku", tarefa: "sonnet" },
-  budgets: { rapido: 40_000, tarefa: 150_000 },
+  models: { rapido: "haiku", tarefa: "sonnet", roadmap: "sonnet" },
+  // A roadmap researches and opens hundreds of pages: a much larger budget, still with the plan confirmed first.
+  budgets: { rapido: 40_000, tarefa: 150_000, roadmap: 800_000 },
   sessionIdleMinutes: 15,
 };
 
@@ -53,6 +56,10 @@ export interface ServerPaths {
   runtimeEnv?: Record<string, string>;
   aniMcp: string;
   appMcp: string;
+  /** The public roadmap catalog server; without it, roadmap requests run as ordinary tasks. */
+  roadmapsMcp?: string;
+  /** Where that server keeps its clone of the catalog. */
+  roadmapsDir?: string;
 }
 
 export type AssistantEvent =
@@ -73,6 +80,12 @@ export interface AssistantOptions {
 
 const CONTINUE_PROMPT = "Continue a tarefa de onde parou.";
 
+/** The engine's own tools a roadmap request may use: research on the web. */
+const WEB_TOOLS = ["WebSearch", "WebFetch"];
+
+type Profile = "geral" | "roadmap";
+const PROFILES: Profile[] = ["geral", "roadmap"];
+
 export async function createAssistant(options: AssistantOptions) {
   const settings: AssistantSettings = {
     ...DEFAULT_SETTINGS,
@@ -81,10 +94,9 @@ export async function createAssistant(options: AssistantOptions) {
     budgets: { ...DEFAULT_SETTINGS.budgets, ...options.settings?.budgets },
   };
   const now = options.now ?? (() => new Date());
-  let sessionId: string | null = null;
   let lastActivity = 0;
   let lastLimits: LimitWindow[] = [];
-  let current: { model: string; plannedSteps: number | null } | null = null;
+  let current: { kind: RequestKind; model: string; plannedSteps: number | null } | null = null;
 
   const bridge: Bridge = await startBridge({
     async approve({ tool, input }): Promise<Decision> {
@@ -93,7 +105,7 @@ export async function createAssistant(options: AssistantOptions) {
     },
     async confirmPlan({ summary, steps }): Promise<Decision> {
       const history = await options.history.load();
-      const estimate = estimatePlan(history, steps.length, current?.model ?? settings.models.tarefa);
+      const estimate = estimatePlan(history, steps.length, current?.model ?? settings.models.tarefa, current?.kind);
       const question = [
         `${summary} São ${steps.length} ${steps.length === 1 ? "passo" : "passos"}, deve gastar ${describeTokens(estimate.low, estimate.high)}.`,
         describeLimits(lastLimits),
@@ -110,57 +122,108 @@ export async function createAssistant(options: AssistantOptions) {
   // MCP servers for every run: the ANI-9 and the app's approval bridge. The
   // file holds the ANI-9 token, so it lives in a private folder, readable only by the person.
   const configDir = mkdtempSync(join(tmpdir(), "ani-assistente-config-"));
-  const mcpConfigPath = join(configDir, "mcp.json");
-  writeFileSync(
-    mcpConfigPath,
-    JSON.stringify({
-      mcpServers: {
-        [ANI_SERVER]: {
-          command: options.servers.runtime,
-          args: [options.servers.aniMcp],
-          env: { ...options.servers.runtimeEnv, ANI_URL: options.ani.url, ANI_TOKEN: options.ani.token },
-        },
-        [APP_SERVER_NAME]: {
-          command: options.servers.runtime,
-          args: [options.servers.appMcp],
-          env: {
-            ...options.servers.runtimeEnv,
-            ASSISTENTE_SOCKET: bridge.socketPath,
-            ASSISTENTE_SECRET: bridge.secret,
-          },
-        },
+  const baseServers = {
+    [ANI_SERVER]: {
+      command: options.servers.runtime,
+      args: [options.servers.aniMcp],
+      env: { ...options.servers.runtimeEnv, ANI_URL: options.ani.url, ANI_TOKEN: options.ani.token },
+    },
+    [APP_SERVER_NAME]: {
+      command: options.servers.runtime,
+      args: [options.servers.appMcp],
+      env: {
+        ...options.servers.runtimeEnv,
+        ASSISTENTE_SOCKET: bridge.socketPath,
+        ASSISTENTE_SECRET: bridge.secret,
       },
-    }),
-    { mode: 0o600 },
-  );
-  chmodSync(mcpConfigPath, 0o600);
-
-  const allowedTools = [...ANI_READ_TOOLS.map((tool) => `mcp__${ANI_SERVER}__${tool}`), PLAN_TOOL];
-  const fixed = { systemPrompt: SYSTEM_PROMPT, mcpConfigPath, allowedTools, approvalTool: APPROVAL_TOOL };
-
-  // A warm engine process kept between requests (when the engine offers it): only the first request pays the start-up.
-  let live: { model: string; session: EngineSession } | null = null;
-
-  function session(model: string): EngineSession | null {
-    if (!options.engine.openSession) return null;
-    if (live && live.session.alive() && live.model === model) return live.session;
-    live?.session.close();
-    live = { model, session: options.engine.openSession({ ...fixed, model, resumeSessionId: sessionId ?? undefined }) };
-    return live.session;
+    },
+  };
+  function writeConfig(name: string, servers: Record<string, unknown>): string {
+    const path = join(configDir, name);
+    writeFileSync(path, JSON.stringify({ mcpServers: servers }), { mode: 0o600 });
+    chmodSync(path, 0o600);
+    return path;
   }
 
-  function stream(prompt: string, model: string, signal: AbortSignal): AsyncIterable<EngineEvent> {
-    const warm = session(model);
+  const aniTools = [...ANI_READ_TOOLS.map((tool) => `mcp__${ANI_SERVER}__${tool}`), PLAN_TOOL];
+  const common = { approvalTool: APPROVAL_TOOL };
+  // Two profiles, each with its own conversation: everyday requests stay lean;
+  // roadmap requests add the catalog server and web research (WebSearch, WebFetch).
+  const profiles: Record<Profile, Omit<SessionOptions, "model">> = {
+    geral: {
+      ...common,
+      systemPrompt: SYSTEM_PROMPT,
+      mcpConfigPath: writeConfig("mcp.json", baseServers),
+      allowedTools: aniTools,
+    },
+    roadmap: options.servers.roadmapsMcp
+      ? {
+          ...common,
+          systemPrompt: `${SYSTEM_PROMPT}\n\n${ROADMAP_PROMPT}`,
+          mcpConfigPath: writeConfig("mcp-roadmap.json", {
+            ...baseServers,
+            [ROADMAPS_SERVER]: {
+              command: options.servers.runtime,
+              args: [options.servers.roadmapsMcp],
+              env: {
+                ...options.servers.runtimeEnv,
+                ...(options.servers.roadmapsDir && { ROADMAPS_DIR: options.servers.roadmapsDir }),
+                ...(process.env.PATH && { PATH: process.env.PATH }),
+              },
+            },
+          }),
+          allowedTools: [
+            ...aniTools,
+            ...ROADMAP_READ_TOOLS.map((tool) => `mcp__${ROADMAPS_SERVER}__${tool}`),
+            ...WEB_TOOLS,
+          ],
+          builtinTools: WEB_TOOLS,
+        }
+      : { ...common, systemPrompt: SYSTEM_PROMPT, mcpConfigPath: join(configDir, "mcp.json"), allowedTools: aniTools },
+  };
+  const profileOf = (kind: RequestKind): Profile =>
+    kind === "roadmap" && options.servers.roadmapsMcp ? "roadmap" : "geral";
+
+  /** Per profile: the engine's conversation id and a warm engine process kept between requests (only the first pays the start-up). */
+  const state: Record<Profile, { sessionId: string | null; live: { model: string; session: EngineSession } | null }> = {
+    geral: { sessionId: null, live: null },
+    roadmap: { sessionId: null, live: null },
+  };
+
+  function session(profile: Profile, model: string): EngineSession | null {
+    if (!options.engine.openSession) return null;
+    const own = state[profile];
+    if (own.live && own.live.session.alive() && own.live.model === model) return own.live.session;
+    own.live?.session.close();
+    own.live = {
+      model,
+      session: options.engine.openSession({ ...profiles[profile], model, resumeSessionId: own.sessionId ?? undefined }),
+    };
+    return own.live.session;
+  }
+
+  function stream(profile: Profile, prompt: string, model: string, signal: AbortSignal): AsyncIterable<EngineEvent> {
+    const warm = session(profile, model);
     return warm
       ? warm.send(prompt, signal)
-      : options.engine.run({ ...fixed, prompt, model, resumeSessionId: sessionId ?? undefined, signal });
+      : options.engine.run({
+          ...profiles[profile],
+          prompt,
+          model,
+          resumeSessionId: state[profile].sessionId ?? undefined,
+          signal,
+        });
+  }
+
+  function forget(profile: Profile) {
+    state[profile].sessionId = null;
+    state[profile].live?.session.close();
+    state[profile].live = null;
   }
 
   function expireIfIdle() {
-    if (sessionId && now().getTime() - lastActivity > settings.sessionIdleMinutes * 60_000) {
-      sessionId = null;
-      live?.session.close();
-      live = null;
+    if (now().getTime() - lastActivity > settings.sessionIdleMinutes * 60_000) {
+      for (const profile of PROFILES) if (state[profile].sessionId) forget(profile);
     }
   }
 
@@ -170,8 +233,9 @@ export async function createAssistant(options: AssistantOptions) {
     const prompt = override?.text ?? text;
     const kind = classifyRequest(prompt);
     const model = override?.model ?? settings.models[kind];
+    const profile = profileOf(kind);
     expireIfIdle();
-    current = { model, plannedSteps: null };
+    current = { kind, model, plannedSteps: null };
     yield { type: "routed", kind, model };
 
     let budget = settings.budgets[kind];
@@ -187,8 +251,8 @@ export async function createAssistant(options: AssistantOptions) {
         let finished = false;
         let used = 0;
         try {
-          for await (const event of stream(nextPrompt, model, run.signal)) {
-            if (event.type === "start") sessionId = event.sessionId;
+          for await (const event of stream(profile, nextPrompt, model, run.signal)) {
+            if (event.type === "start") state[profile].sessionId = event.sessionId;
             if (event.type === "limits") lastLimits = event.windows;
             if (event.type === "usage") {
               used = totalTokens(event.usage);
@@ -199,7 +263,7 @@ export async function createAssistant(options: AssistantOptions) {
             }
             if (event.type === "done") {
               finished = true;
-              sessionId = event.sessionId;
+              state[profile].sessionId = event.sessionId;
               total = event.usage;
               spentBefore += totalTokens(event.usage);
               yield { type: "done", text: event.text, usage: event.usage, costUsd: event.costUsd };
@@ -243,18 +307,16 @@ export async function createAssistant(options: AssistantOptions) {
     /** Start the engine ahead of a request (when the person starts talking), so it is ready when the text arrives. */
     warm(kind: RequestKind = "rapido") {
       expireIfIdle();
-      session(settings.models[kind]);
+      session(profileOf(kind), settings.models[kind]);
     },
     /** Forget the conversation (the next request starts a new session). */
     reset() {
-      sessionId = null;
-      live?.session.close();
-      live = null;
+      for (const profile of PROFILES) forget(profile);
     },
     limits: () => lastLimits,
     settings: () => settings,
     async close() {
-      live?.session.close();
+      for (const profile of PROFILES) state[profile].live?.session.close();
       await bridge.close();
       rmSync(configDir, { recursive: true, force: true });
     },

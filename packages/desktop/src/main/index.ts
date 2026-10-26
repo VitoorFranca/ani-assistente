@@ -16,7 +16,7 @@ import {
 } from "./storage.js";
 import { createVoice, takeSentences, wakeRequest, yesOrNo, type Voice } from "./voice.js";
 import { VOICES, vozArgs } from "./voices.js";
-import { findClaude } from "./claudePath.js";
+import { adoptLoginPath, findClaude } from "./claudePath.js";
 
 // The menu bar app: an icon, a global shortcut and a small panel. The
 // assistant core runs here, in the main process; the panel only shows and asks.
@@ -28,7 +28,7 @@ app.setName("Ani");
 const here = __dirname;
 // The MCP servers run as separate processes, so the packaged app keeps them outside the asar archive.
 const mcpDir = join(here, "mcp").replace("app.asar/", "app.asar.unpacked/");
-const MCP = { ani: join(mcpDir, "ani.mjs"), app: join(mcpDir, "app.mjs") };
+const MCP = { ani: join(mcpDir, "ani.mjs"), app: join(mcpDir, "app.mjs"), roadmaps: join(mcpDir, "roadmaps.mjs") };
 /** The voice helper (native/voz): bundled with the app, or built in the repository during development. */
 const VOZ = app.isPackaged
   ? join(process.resourcesPath, "bin", "voz")
@@ -121,7 +121,15 @@ async function rebuildAssistant() {
   assistant = await createAssistant({
     engine,
     ani: { url: settings.aniUrl, token },
-    servers: { runtime: process.execPath, runtimeEnv: { ELECTRON_RUN_AS_NODE: "1" }, aniMcp: MCP.ani, appMcp: MCP.app },
+    servers: {
+      runtime: process.execPath,
+      runtimeEnv: { ELECTRON_RUN_AS_NODE: "1" },
+      aniMcp: MCP.ani,
+      appMcp: MCP.app,
+      // The public roadmap catalog: a clone in the app's data folder; pull requests go through the person's gh.
+      roadmapsMcp: MCP.roadmaps,
+      roadmapsDir: join(app.getPath("userData"), "roadmaps"),
+    },
     prompts: {
       confirmAction: (question) => ask("action", question),
       confirmPlan: ({ question, steps }) => ask("plan", question, steps),
@@ -441,8 +449,16 @@ ipcMain.on("ani", (_event, raw: unknown) => {
         aniUrl: message.aniUrl ?? settings.aniUrl,
         assistant: {
           ...a,
-          models: { rapido: message.quickModel ?? a.models.rapido, tarefa: message.taskModel ?? a.models.tarefa },
-          budgets: { rapido: message.quickBudget ?? a.budgets.rapido, tarefa: message.taskBudget ?? a.budgets.tarefa },
+          models: {
+            ...a.models,
+            rapido: message.quickModel ?? a.models.rapido,
+            tarefa: message.taskModel ?? a.models.tarefa,
+          },
+          budgets: {
+            ...a.budgets,
+            rapido: message.quickBudget ?? a.budgets.rapido,
+            tarefa: message.taskBudget ?? a.budgets.tarefa,
+          },
         },
       };
       saveSettings(settings);
@@ -455,6 +471,7 @@ ipcMain.on("ani", (_event, raw: unknown) => {
 app.whenReady().then(async () => {
   app.dock?.hide();
   settings = loadSettings();
+  await adoptLoginPath();
   engine = createClaudeCodeEngine({ command: await findClaude(), openTerminal });
   createPanel();
   tray = new Tray(nativeImage.createEmpty());

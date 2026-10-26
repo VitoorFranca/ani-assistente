@@ -50,6 +50,73 @@ async function collect(events: AsyncIterable<AssistantEvent>) {
   return all;
 }
 
+describe("assistant: roadmaps", () => {
+  it("runs roadmap requests in their own conversation, with the catalog server and web research", async () => {
+    const engine = scriptedEngine(async function* (request) {
+      const id = request.builtinTools?.length ? "roteiro" : "geral";
+      yield { type: "start", sessionId: id, model: "claude-sonnet" };
+      yield { type: "done", text: "ok", sessionId: id, usage: usage(1000), costUsd: null, durationMs: 1, denied: [] };
+    });
+    const assistant = await createAssistant({
+      engine,
+      ani,
+      servers: { ...servers, roadmapsMcp: "/x/roadmaps.js", roadmapsDir: "/tmp/catalogo" },
+      prompts: prompts({}, []),
+      history: createMemoryHistory(),
+    });
+    try {
+      const routed = await collect(assistant.ask("Cria um roadmap de química orgânica"));
+      expect(routed[0]).toEqual({ type: "routed", kind: "roadmap", model: "sonnet" });
+      const roadmap = engine.requests[0]!;
+      expect(roadmap.builtinTools).toEqual(["WebSearch", "WebFetch"]);
+      expect(roadmap.allowedTools).toEqual(
+        expect.arrayContaining([
+          "WebSearch",
+          "WebFetch",
+          "mcp__roadmaps__roadmap_preparar",
+          "mcp__roadmaps__roadmap_salvar_e_validar",
+        ]),
+      );
+      // Publishing always asks: the pull request tool is not allowed by default.
+      expect(roadmap.allowedTools).not.toContain("mcp__roadmaps__roadmap_abrir_pr");
+      expect(roadmap.systemPrompt).toContain("roadmap_preparar");
+      const config = JSON.parse(readFileSync(roadmap.mcpConfigPath, "utf8"));
+      expect(config.mcpServers.roadmaps.env.ROADMAPS_DIR).toBe("/tmp/catalogo");
+
+      // An everyday request stays lean: no web tools, no catalog server, its own conversation.
+      await collect(assistant.ask("Quantas revisões eu tenho hoje?"));
+      const everyday = engine.requests[1]!;
+      expect(everyday.builtinTools).toBeUndefined();
+      expect(JSON.parse(readFileSync(everyday.mcpConfigPath, "utf8")).mcpServers.roadmaps).toBeUndefined();
+      expect(everyday.resumeSessionId).toBeUndefined();
+      // Back to the roadmap: its conversation continues.
+      await collect(assistant.ask("Revisa o roadmap de química e melhora as fontes"));
+      expect(engine.requests[2]!.resumeSessionId).toBe("roteiro");
+    } finally {
+      await assistant.close();
+    }
+  });
+
+  it("without the catalog server, a roadmap request runs as an ordinary task", async () => {
+    const engine = scriptedEngine(async function* () {
+      yield { type: "done", text: "ok", sessionId: "s", usage: usage(10), costUsd: null, durationMs: 1, denied: [] };
+    });
+    const assistant = await createAssistant({
+      engine,
+      ani,
+      servers,
+      prompts: prompts({}, []),
+      history: createMemoryHistory(),
+    });
+    try {
+      await collect(assistant.ask("Cria um roadmap de química"));
+      expect(engine.requests[0]!.builtinTools).toBeUndefined();
+    } finally {
+      await assistant.close();
+    }
+  });
+});
+
 describe("assistant", () => {
   it("routes the request, lets reads run and keeps the ANI-9 token in a private config", async () => {
     const engine = scriptedEngine(async function* () {

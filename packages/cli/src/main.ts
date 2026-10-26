@@ -56,6 +56,7 @@ const assistant = await createAssistant({
     runtime: process.execPath,
     aniMcp: join(packages, "ani-mcp/dist/index.js"),
     appMcp: join(packages, "app-mcp/dist/main.js"),
+    roadmapsMcp: join(packages, "roadmaps-mcp/dist/index.js"),
   },
   prompts: {
     confirmAction: (question) => yes(question),

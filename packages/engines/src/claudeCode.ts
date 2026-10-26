@@ -41,7 +41,7 @@ const PLAN_NAMES: Record<string, string> = {
   free: "Free",
 };
 
-/** The CLI arguments for one run: a lean context (no coding prompt, tools or personal settings). */
+/** The CLI arguments for one run: a lean context (no coding prompt, personal settings or built-in tools beyond the ones asked for). */
 export function claudeArgs(request: RunRequest): string[] {
   const args = [
     "-p",
@@ -53,7 +53,7 @@ export function claudeArgs(request: RunRequest): string[] {
     "--system-prompt",
     request.systemPrompt,
     "--tools",
-    "",
+    (request.builtinTools ?? []).join(","),
     "--setting-sources",
     "",
     "--mcp-config",
