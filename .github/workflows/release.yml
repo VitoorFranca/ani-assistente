@@ -1,0 +1,138 @@
+name: Release
+
+# Builds Ani.app for macOS (Apple Silicon) and publishes it.
+#
+#   tag vX.Y.Z      tests, packages and creates the GitHub release vX.Y.Z with
+#                   Ani-X.Y.Z-macos-arm64.zip and its SHA-256
+#   Run workflow    the same build, kept only as an artifact of the run (to try
+#                   before tagging); nothing is published
+#
+# The tag must match "version" in packages/desktop/package.json.
+#
+# Signing: without secrets the app is signed ad-hoc (macOS asks to confirm the
+# first time it opens). With these repository secrets it is signed with a
+# Developer ID and notarized:
+#   MACOS_CERTIFICATE_P12 (base64), MACOS_CERTIFICATE_PASSWORD, SIGN_IDENTITY,
+#   APPLE_ID, APPLE_APP_PASSWORD, APPLE_TEAM_ID
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      HAS_CERT: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versão
+        id: version
+        run: |
+          version=$(node -p 'require("./packages/desktop/package.json").version')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::A tag $GITHUB_REF_NAME não bate com a versão $version de packages/desktop/package.json."
+            exit 1
+          fi
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Testes
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm format:check
+          pnpm build
+          pnpm check
+          pnpm test
+
+      - name: Cache do Swift (voz)
+        uses: actions/cache@v4
+        with:
+          path: native/voz/.build
+          key: voz-${{ runner.os }}-${{ hashFiles('native/voz/Package.resolved', 'native/voz/Sources/**') }}
+          restore-keys: voz-${{ runner.os }}-
+
+      - name: Compilar a voz (Swift)
+        run: |
+          swift --version
+          swift build -c release --package-path native/voz
+          test -x native/voz/.build/release/voz
+
+      - name: Certificado Developer ID
+        if: env.HAS_CERT == 'true'
+        env:
+          P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/release.keychain-db"
+          password=$(openssl rand -hex 16)
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+
+      - name: Empacotar Ani.app
+        env:
+          SIGN_IDENTITY: ${{ env.HAS_CERT == 'true' && secrets.SIGN_IDENTITY || '' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          pnpm -C packages/desktop package
+          name="Ani-${{ steps.version.outputs.version }}-macos-arm64.zip"
+          mv packages/desktop/release/Ani-darwin-arm64.zip "$name"
+          shasum -a 256 "$name" > "$name.sha256"
+          cat "$name.sha256"
+          echo "ZIP=$name" >> "$GITHUB_ENV"
+
+      - name: Guardar como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ani-${{ steps.version.outputs.version }}-macos-arm64
+          path: |
+            ${{ env.ZIP }}
+            ${{ env.ZIP }}.sha256
+          retention-days: 14
+
+      - name: Publicar a release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNED: ${{ env.HAS_CERT }}
+        run: |
+          if [ "$SIGNED" = "true" ]; then
+            install="Baixe o zip, abra e arraste **Ani.app** para Aplicativos."
+          else
+            install=$(printf '%s\n\n%s\n\n%s' \
+              "Baixe o zip, abra e arraste **Ani.app** para Aplicativos." \
+              "Esta versão não tem assinatura da Apple. Na primeira vez, clique com o botão direito em Ani.app → **Abrir** (ou rode \`xattr -dr com.apple.quarantine /Applications/Ani.app\`)." \
+              "Confira o arquivo com \`shasum -a 256 -c $ZIP.sha256\`.")
+          fi
+          notes=$(printf '%s\n\n%s\n\n%s' \
+            "## Instalar" "$install" \
+            "Requer macOS 26 em Mac com Apple Silicon, o Claude Code instalado e com login (a sua assinatura) e um token do ANI-9. Os modelos de voz são baixados na primeira vez.")
+          gh release create "$GITHUB_REF_NAME" "$ZIP" "$ZIP.sha256" \
+            --title "Ani $GITHUB_REF_NAME" --notes "$notes" --generate-notes --verify-tag
+
+      - name: Limpar o keychain
+        if: always() && env.HAS_CERT == 'true'
+        run: security delete-keychain "$RUNNER_TEMP/release.keychain-db" || true

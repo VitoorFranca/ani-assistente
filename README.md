@@ -74,6 +74,21 @@ O "Ani" aparece na barra de menus. Na primeira vez, cole o token do ANI-9.
 modelo de fala (cerca de 600 MB) é baixado e preparado, o que leva alguns
 minutos. O macOS pede permissão para o microfone.
 
+## Versões (releases)
+
+O workflow [`release.yml`](.github/workflows/release.yml) roda os testes,
+compila a voz, empacota o `Ani.app` (Apple Silicon) e publica a release com o
+zip e o SHA-256.
+
+1. Mude `version` em `packages/desktop/package.json` (por exemplo, `0.2.0`) e
+   faça o commit.
+2. `git tag v0.2.0 && git push origin v0.2.0`.
+
+Para testar sem publicar, rode o workflow à mão (Actions → Release → Run
+workflow): o zip fica só como artefato da execução. Sem os segredos de
+assinatura da Apple, o app sai com assinatura ad-hoc, e o macOS pede para
+confirmar na primeira vez que ele abre (botão direito → Abrir).
+
 ## Regras deste projeto sobre assinaturas
 
 O projeto segue os [termos do Claude Code](https://code.claude.com/docs/en/legal-and-compliance):
