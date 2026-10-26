@@ -15,6 +15,7 @@ import {
   type AppSettings,
 } from "./storage.js";
 import { createVoice, yesOrNo, type Voice } from "./voice.js";
+import { findClaude } from "./claudePath.js";
 
 // The menu bar app: an icon, a global shortcut and a small panel. The
 // assistant core runs here, in the main process; the panel only shows and asks.
@@ -24,8 +25,9 @@ if (process.env.ANI_ASSISTENTE_DATA) app.setPath("userData", process.env.ANI_ASS
 app.setName("Ani");
 
 const here = __dirname;
-const resources = app.isPackaged ? join(process.resourcesPath, "app") : join(here);
-const MCP = { ani: join(resources, "mcp", "ani.mjs"), app: join(resources, "mcp", "app.mjs") };
+// The MCP servers run as separate processes, so the packaged app keeps them outside the asar archive.
+const mcpDir = join(here, "mcp").replace("app.asar/", "app.asar.unpacked/");
+const MCP = { ani: join(mcpDir, "ani.mjs"), app: join(mcpDir, "app.mjs") };
 /** The voice helper (native/voz): bundled with the app, or built in the repository during development. */
 const VOZ = app.isPackaged
   ? join(process.resourcesPath, "bin", "voz")
@@ -39,7 +41,7 @@ function openTerminal(command: string): Promise<void> {
   );
 }
 
-const engine = createClaudeCodeEngine({ openTerminal });
+let engine = createClaudeCodeEngine({ openTerminal });
 let settings: AppSettings;
 let assistant: Assistant | null = null;
 let tray: Tray | null = null;
@@ -367,6 +369,7 @@ ipcMain.on("ani", (_event, raw: unknown) => {
 app.whenReady().then(async () => {
   app.dock?.hide();
   settings = loadSettings();
+  engine = createClaudeCodeEngine({ command: await findClaude(), openTerminal });
   createPanel();
   tray = new Tray(nativeImage.createEmpty());
   tray.setTitle("Ani");

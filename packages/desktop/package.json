@@ -10,7 +10,8 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "echo \"sem testes ainda: protocolo e núcleo cobertos nos outros pacotes\"",
     "start": "node build.mjs && electron .",
-    "prestart": "install-electron"
+    "prestart": "install-electron",
+    "package": "node package.mjs"
   },
   "dependencies": {
     "@ani-assistente/core": "workspace:*",
@@ -23,6 +24,8 @@
     "@types/node": "^22.0.0",
     "electron": "44.7.0",
     "esbuild": "0.28.2",
-    "typescript": "7.0.2"
-  }
+    "typescript": "7.0.2",
+    "@electron/packager": "20.3.0"
+  },
+  "productName": "Ani"
 }
