@@ -7,7 +7,7 @@ export const toMain = z.discriminatedUnion("type", [
   z.object({ type: z.literal("ask"), text: z.string().min(1).max(4000) }),
   /** Start or stop listening (the microphone button). */
   z.object({ type: z.literal("listen") }),
-  z.object({ type: z.literal("saveVoice"), enabled: z.boolean() }),
+  z.object({ type: z.literal("saveVoice"), enabled: z.boolean().optional(), wake: z.boolean().optional() }),
   z.object({ type: z.literal("stop") }),
   z.object({ type: z.literal("answer"), id: z.number().int(), yes: z.boolean() }),
   z.object({ type: z.literal("reset") }),
@@ -53,7 +53,7 @@ export const toRenderer = z.discriminatedUnion("type", [
       taskBudget: z.number(),
     }),
     limits: z.array(limit),
-    voice: z.object({ enabled: z.boolean(), available: z.boolean() }),
+    voice: z.object({ enabled: z.boolean(), available: z.boolean(), wake: z.boolean() }),
   }),
   z.object({ type: z.literal("routed"), kind: z.string(), model: z.string() }),
   z.object({ type: z.literal("text"), delta: z.string() }),

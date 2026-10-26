@@ -93,7 +93,8 @@ valem os termos de cada fornecedor, conferidos antes de o adaptador entrar.
    conversa pelo terminal (`packages/cli`) e app de barra de menus. ✅
 4. Voz: modelo de fala escolhido por comparação em pt-BR
    ([`bench/stt`](bench/stt/README.md)), atalho global, respostas e
-   confirmações faladas. ✅ Falta: "Ei, Ani", voz própria, instalador.
+   confirmações faladas, fala por frases, "Ei, Ani" (opcional) e instalador
+   (`pnpm -C packages/desktop package`). ✅ Falta: voz própria.
 5. Outros motores (chave de API; Cursor, depois de conferir os termos dele).
 
 ## Licença

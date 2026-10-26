@@ -14,7 +14,7 @@ import {
   voiceModelsPath,
   type AppSettings,
 } from "./storage.js";
-import { createVoice, yesOrNo, type Voice } from "./voice.js";
+import { createVoice, takeSentences, wakeRequest, yesOrNo, type Voice } from "./voice.js";
 import { findClaude } from "./claudePath.js";
 
 // The menu bar app: an icon, a global shortcut and a small panel. The
@@ -151,7 +151,7 @@ async function sendStatus() {
       taskBudget: settings.assistant.budgets.tarefa,
     },
     limits: lastLimits.map((w) => ({ ...w, resetsAt: w.resetsAt?.toISOString() ?? null })),
-    voice: { enabled: settings.voice.enabled, available: existsSync(VOZ) },
+    voice: { enabled: settings.voice.enabled, available: existsSync(VOZ), wake: settings.voice.wake },
   });
 }
 
@@ -161,8 +161,23 @@ async function runRequest(text: string) {
   const controller = new AbortController();
   running = controller;
   const started = Date.now();
+  // A voice request is answered by voice, sentence by sentence as the text arrives.
+  const speaker = voiceTurn && voice ? voice.speaker() : null;
+  let unspoken = "";
+  let spokeSomething = false;
+  const say = (sentence: string) => {
+    if (!speaker || !sentence.trim()) return;
+    if (!spokeSomething) send({ type: "voice", state: "speaking" });
+    spokeSomething = true;
+    void speaker.say(sentence);
+  };
   try {
     for await (const event of assistant.ask(text, controller.signal)) {
+      if (speaker && event.type === "text") {
+        const { ready, rest } = takeSentences(unspoken + event.delta);
+        unspoken = rest;
+        ready.forEach(say);
+      }
       switch (event.type) {
         case "routed":
           send({ type: "routed", kind: event.kind, model: event.model });
@@ -190,10 +205,9 @@ async function runRequest(text: string) {
             tokens: totalTokens(event.usage),
             seconds: (Date.now() - started) / 1000,
           });
-          if (voiceTurn && voice && event.text) {
-            send({ type: "voice", state: "speaking" });
-            void voice.speak(event.text).then(() => send({ type: "voice", state: "idle" }));
-          }
+          // Whatever was not spoken yet (or the whole answer, if nothing streamed).
+          say(spokeSomething ? unspoken : event.text);
+          unspoken = "";
           break;
         case "error":
           if (event.kind !== "aborted") send({ type: "error", message: event.message });
@@ -208,11 +222,53 @@ async function runRequest(text: string) {
   } finally {
     if (running === controller) running = null;
   }
+  if (speaker) {
+    if (controller.signal.aborted) speaker.stop();
+    else await speaker.finished();
+    send({ type: "voice", state: "idle" });
+  }
+}
+
+/** "Ei, Ani": listening for the wake word, paused while a request is heard, answered or confirmed. */
+let watching = false;
+function setWatching(on: boolean) {
+  const want = on && Boolean(voice) && settings.voice.enabled && settings.voice.wake;
+  if (want === watching) return;
+  watching = want;
+  void voice?.watch(want);
+}
+
+async function onWake(rest: string) {
+  setWatching(false);
+  showPanel();
+  try {
+    if (rest.length >= 3) {
+      // "Ei, Ani, quantas revisões…": the request came with the wake word.
+      voiceTurn = true;
+      send({ type: "heard", text: rest });
+      await runRequest(rest);
+    } else {
+      await listenAndAsk();
+    }
+  } finally {
+    setWatching(true);
+  }
 }
 
 /** Shortcut or microphone button: stop talking if speaking, else listen and send what was heard. */
 async function listenAndAsk() {
   if (!voice || !settings.voice.enabled) return;
+  const resume = watching;
+  setWatching(false);
+  try {
+    await listenAndAskNow();
+  } finally {
+    if (resume) setWatching(true);
+  }
+}
+
+async function listenAndAskNow() {
+  if (!voice) return;
   showPanel();
   if (questions.size) return; // a question is waiting: it is listening already
   voice.stopSpeaking();
@@ -234,15 +290,27 @@ function startVoice() {
     binary: VOZ,
     modelsDir: voiceModelsPath(),
     asr: settings.voice.asr,
+    // Test hooks (see packages/desktop/README): never set in normal use.
+    testWakeFile: process.env.ANI_ASSISTENTE_TEST_WAKE_FILE,
+    mute: process.env.ANI_ASSISTENTE_MUTE === "1",
     onEvent: (event) => {
       if (event.type === "level") send({ type: "voice", state: "listening", level: Math.min(1, event.rms * 12) });
       if (event.type === "speechStart") send({ type: "voice", state: "hearing" });
       if (event.type === "error") send({ type: "voice", state: "idle", detail: event.message });
+      if (event.type === "overheard" && watching) {
+        // Anything that is not the wake word is dropped here, never kept or shown.
+        const wake = wakeRequest(event.text);
+        if (wake.woke) void onWake(wake.rest);
+      }
     },
   });
   send({ type: "voice", state: "loading", detail: "Carregando a voz (na primeira vez, baixa o modelo de fala)…" });
+  watching = false;
   voice.start().then(
-    () => send({ type: "voice", state: "idle" }),
+    () => {
+      send({ type: "voice", state: "idle" });
+      setWatching(true);
+    },
     (error) =>
       send({ type: "voice", state: "off", detail: error instanceof Error ? error.message : "A voz não iniciou." }),
   );
@@ -320,9 +388,17 @@ ipcMain.on("ani", (_event, raw: unknown) => {
       void listenAndAsk();
       break;
     case "saveVoice":
-      settings = { ...settings, voice: { ...settings.voice, enabled: message.enabled } };
+      settings = {
+        ...settings,
+        voice: {
+          ...settings.voice,
+          enabled: message.enabled ?? settings.voice.enabled,
+          wake: message.wake ?? settings.voice.wake,
+        },
+      };
       saveSettings(settings);
-      startVoice();
+      if (message.enabled !== undefined) startVoice();
+      else setWatching(true);
       void sendStatus();
       break;
     case "stop":

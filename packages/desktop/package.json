@@ -8,7 +8,7 @@
   "scripts": {
     "build": "node build.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "echo \"sem testes ainda: protocolo e núcleo cobertos nos outros pacotes\"",
+    "test": "vitest run",
     "start": "node build.mjs && electron .",
     "prestart": "install-electron",
     "package": "node package.mjs"
@@ -25,7 +25,8 @@
     "electron": "44.7.0",
     "esbuild": "0.28.2",
     "typescript": "7.0.2",
-    "@electron/packager": "20.3.0"
+    "@electron/packager": "20.3.0",
+    "vitest": "5.0.2"
   },
   "productName": "Ani"
 }

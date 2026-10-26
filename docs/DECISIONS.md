@@ -156,6 +156,33 @@ Air M4, FLEURS pt_br com 100 frases e 24 comandos):
 - A voz própria (Kokoro, PocketTTS) entra depois de medir naturalidade em
   pt-BR; o README do FluidAudio é contraditório sobre o suporte a português.
 
+## "Ei, Ani": o próprio reconhecimento de fala, sem detector pago
+
+**Escolhido:** no modo de ativação, o `voz` separa trechos curtos de fala
+(Silero, até 5 s) e transcreve cada um com o Parakeet; o app aceita o trecho
+só se ele começar com a palavra de ativação e descarta o resto na hora, sem
+guardar nem mostrar.
+
+- O Parakeet escreve "Ei, Ani" de vários jeitos ("Eiane", "Oiane", "Ani,").
+  A regra junta as duas primeiras palavras e aceita uma saudação opcional
+  mais "Ani" ("ani", "ane", "annie"). Testada com transcrições reais; "Ana",
+  "Anime", "Ei, Antônio" e frases comuns não ativam. "Ei ole ni" (uma das
+  transcrições) não ativa: prefere-se repetir a ativar sozinho.
+- Se o pedido vier junto ("Ei, Ani, quantas revisões…"), ele vai direto.
+- Desligado por padrão: o microfone fica aberto o tempo todo enquanto ligado
+  (nada sai do Mac). A escuta pausa enquanto a Ani ouve um pedido, responde ou
+  pergunta, para não ouvir a si mesma.
+- Descartados: Porcupine (exige chave da Picovoice), openWakeWord (ONNX em
+  Python, novo runtime) e o vocabulário personalizado do FluidAudio (a
+  avaliar para melhorar a ativação e os termos em inglês).
+
+## Fala por frases
+
+A resposta é dividida em frases enquanto chega, e cada frase vai para a
+síntese de voz assim que termina (a síntese enfileira). Frases muito curtas
+("Pronto.") esperam a seguinte; decimais ("3.5") não cortam. Com isso, a voz
+começa ao fim da primeira frase, não da resposta inteira.
+
 ## Sessão viva: o motor aquece enquanto a pessoa fala
 
 O `claude -p` com `--input-format stream-json` fica aberto e recebe um pedido

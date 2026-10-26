@@ -364,6 +364,26 @@ function settingsView(status: Status | null) {
           })
         : h("span", { class: "muted" }, "componente de voz não encontrado"),
     ),
+    status.voice.available &&
+      status.voice.enabled &&
+      h(
+        "div",
+        { class: "row" },
+        h(
+          "span",
+          {
+            title: "O microfone fica aberto para ouvir “Ei, Ani”. Tudo acontece neste Mac: nada é gravado nem enviado.",
+          },
+          "“Ei, Ani”",
+        ),
+        h("input", {
+          type: "checkbox",
+          checked: status.voice.wake,
+          onchange: (e: Event) => send({ type: "saveVoice", wake: (e.target as HTMLInputElement).checked }),
+        }),
+      ),
+    status.voice.wake &&
+      h("p", { class: "muted" }, "O microfone fica aberto para ouvir “Ei, Ani”. Nada sai deste Mac."),
     h("h2", {}, "Conexões"),
     h("p", {}, `${status.engine.label}: ${status.engine.loggedIn ? `conectado · ${status.engine.plan}` : "sem login"}`),
     h("p", {}, `ANI-9: ${status.ani.connected ? status.ani.account : "não conectado"} · ${status.ani.url}`),

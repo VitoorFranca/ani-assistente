@@ -11,14 +11,15 @@ export interface AppSettings {
   assistant: AssistantSettings;
   /** Global shortcut that opens the assistant (and starts listening when voice is on). */
   shortcut: string;
-  voice: { enabled: boolean; asr: "ultra" | "v3" };
+  /** wake: "Ei, Ani" keeps the microphone open (on this Mac only) to hear the wake word. Off by default. */
+  voice: { enabled: boolean; asr: "ultra" | "v3"; wake: boolean };
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   aniUrl: "https://www.ani9.online",
   assistant: DEFAULT_SETTINGS,
   shortcut: "Alt+Space",
-  voice: { enabled: true, asr: "ultra" },
+  voice: { enabled: true, asr: "ultra", wake: false },
 };
 
 const dir = () => {

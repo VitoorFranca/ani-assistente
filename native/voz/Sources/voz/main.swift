@@ -7,8 +7,11 @@
 //   {"cmd":"listenFile","path":"…"}     same path from a WAV, at real-time pace (tests)
 //   {"cmd":"cancel"}                    stop listening, nothing is transcribed
 //   {"cmd":"speak","text":"…","voice":"…"?}   say it (pt-BR); {"cmd":"stopSpeaking"}
+//   {"cmd":"watch","on":true|false}     wake-word mode: transcribe short utterances and report them
+//                                       (the app keeps only the ones that start with the wake word)
 // Events on stdout, one JSON object per line:
 //   ready{loadMs} · listening · level{rms} · speechStart · heard{text,speechMs,asrMs} · nothing · spoken · error{message}
+//   overheard{text} (watch mode only)
 // Audio never leaves this process: nothing is written to disk or sent anywhere.
 @preconcurrency import AVFoundation
 import FluidAudio
@@ -53,9 +56,53 @@ actor Ears {
 
     func cancel() { cancelled = true }
 
+    /** A new listening waits (up to 2 s) for the previous one to wind down instead of being refused. */
+    private func waitIdle() async -> Bool {
+        for _ in 0..<100 where busy { try? await Task.sleep(nanoseconds: 20_000_000) }
+        return !busy
+    }
+
+    /** Wake-word mode: every short utterance (up to 5 s) is transcribed and reported, until cancelled. */
+    func watch(chunks: AsyncStream<[Float]>) async {
+        guard await waitIdle() else { return }
+        busy = true
+        cancelled = false
+        defer { busy = false }
+        var state = await vad.makeStreamState()
+        let config = VadSegmentationConfig(minSilenceDuration: 0.4, maxSpeechDuration: 5)
+        var preRoll: [[Float]] = []
+        var utterance: [Float] = []
+        var speaking = false
+        for await samples in chunks {
+            if cancelled { return }
+            guard let result = try? await vad.processStreamingChunk(samples, state: state, config: config) else { continue }
+            state = result.state
+            if speaking { utterance += samples } else {
+                preRoll.append(samples)
+                if preRoll.count > preRollChunks { preRoll.removeFirst() }
+            }
+            let ended = result.event?.isEnd == true || Double(utterance.count) / sampleRate > 5
+            if result.event?.isStart == true, !speaking {
+                speaking = true
+                utterance = preRoll.flatMap { $0 }
+            } else if ended, speaking {
+                speaking = false
+                let audio = utterance
+                utterance = []
+                preRoll = []
+                var decoder = TdtDecoderState.make()
+                if let text = try? await asr.transcribe(audio, decoderState: &decoder, language: .portuguese).text,
+                    !text.isEmpty, !cancelled
+                {
+                    emit(["type": "overheard", "text": text])
+                }
+            }
+        }
+    }
+
     /// Consumes 16 kHz mono chunks until the end of speech; returns the text (nil: no speech or cancelled).
     func listen(chunks: AsyncStream<[Float]>) async -> (text: String, speechMs: Int, asrMs: Int)? {
-        guard !busy else { return nil }
+        guard await waitIdle() else { return nil }
         busy = true
         cancelled = false
         defer { busy = false }
@@ -139,10 +186,21 @@ func convert(_ buffer: AVAudioPCMBuffer, with converter: AVAudioConverter) -> AV
     return error == nil ? out : nil
 }
 
+/// One capture at a time. Each start() gets a number; stop(n) only stops that capture, and stopping ends its stream.
 final class Microphone: @unchecked Sendable {
     private let engine = AVAudioEngine()
-    func start() throws -> AsyncStream<[Float]> {
+    private let lock = NSLock()
+    private var generation = 0
+    private var continuation: AsyncStream<[Float]>.Continuation?
+
+    func start() throws -> (stream: AsyncStream<[Float]>, id: Int) {
+        stop()
         let (stream, continuation) = AsyncStream<[Float]>.makeStream()
+        lock.lock()
+        generation += 1
+        let id = generation
+        self.continuation = continuation
+        lock.unlock()
         let chunker = Chunker(continuation)
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
@@ -151,12 +209,19 @@ final class Microphone: @unchecked Sendable {
             if let out = convert(buffer, with: converter) { chunker.push(out) }
         }
         try engine.start()
-        continuation.onTermination = { [weak self] _ in self?.stop() }
-        return stream
+        return (stream, id)
     }
-    func stop() {
+
+    /// Stops the current capture (or only capture `id`, if given) and ends its stream.
+    func stop(_ id: Int? = nil) {
+        lock.lock()
+        defer { lock.unlock() }
+        if let id, id != generation { return }
+        guard let continuation else { return }
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        continuation.finish()
+        self.continuation = nil
     }
 }
 
@@ -233,14 +298,14 @@ let mouth = Mouth()
 let microphone = Microphone()
 emit(["type": "ready", "loadMs": Int(Date().timeIntervalSince(started) * 1000), "asr": asrName])
 
-func hear(_ chunks: AsyncStream<[Float]>) {
+func hear(_ chunks: AsyncStream<[Float]>, capture: Int? = nil) {
     Task {
         if let heard = await ears.listen(chunks: chunks) {
             emit(["type": "heard", "text": heard.text, "speechMs": heard.speechMs, "asrMs": heard.asrMs])
         } else {
             emit(["type": "nothing"])
         }
-        microphone.stop()
+        if let capture { microphone.stop(capture) }
     }
 }
 
@@ -251,9 +316,30 @@ func handle(_ line: String) {
     else { return }
     switch cmd {
     case "listen":
-        do { hear(try microphone.start()) } catch { emit(["type": "error", "message": "microfone: \(error.localizedDescription)"]) }
+        do {
+            let capture = try microphone.start()
+            hear(capture.stream, capture: capture.id)
+        } catch { emit(["type": "error", "message": "microfone: \(error.localizedDescription)"]) }
     case "listenFile":
         do { hear(try fileChunks(command["path"] as? String ?? "")) } catch { emit(["type": "error", "message": "arquivo: \(error.localizedDescription)"]) }
+    case "watch":
+        if command["on"] as? Bool == true {
+            do {
+                let capture = try microphone.start()
+                Task {
+                    await ears.watch(chunks: capture.stream)
+                    microphone.stop(capture.id)
+                }
+            } catch { emit(["type": "error", "message": "microfone: \(error.localizedDescription)"]) }
+        } else {
+            Task { await ears.cancel() }
+            microphone.stop()
+        }
+    case "watchFile":
+        do {
+            let chunks = try fileChunks(command["path"] as? String ?? "")
+            Task { await ears.watch(chunks: chunks) }
+        } catch { emit(["type": "error", "message": "arquivo: \(error.localizedDescription)"]) }
     case "cancel":
         Task { await ears.cancel() }
         microphone.stop()
