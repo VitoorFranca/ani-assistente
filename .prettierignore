@@ -4,3 +4,5 @@ dist/
 bench/stt/models/
 bench/stt/data/
 bench/stt/audio/
+bench/tts/models/
+bench/tts/audio/

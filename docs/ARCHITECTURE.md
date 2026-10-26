@@ -7,7 +7,7 @@
 │                       núcleo (packages/core)   │   voz (native/voz, Swift)     │
 │                       rota, estimativa, limite │   microfone → fim da fala →   │
 │                       confirmações             │   Parakeet → texto            │
-│                                │               │   texto → voz do macOS        │
+│                                │               │   texto → voz (macOS/neural)  │
 └────────────────────────────────┼───────────────┴───────────────────────────────┘
                                  │ motor (packages/engines)
                                  ▼
@@ -32,6 +32,7 @@
 | `packages/desktop` | O app de barra de menus: painel, atalho global, voz, ajustes.                                     |
 | `native/voz`       | Ouvir e falar, num processo nativo.                                                               |
 | `bench/stt`        | Comparação de reconhecimento de fala em pt-BR que escolheu o motor de `voz`.                      |
+| `bench/tts`        | Comparação das vozes que respondem (macOS, Supertonic 3, PocketTTS…) em pt-BR.                    |
 
 ## Um pedido, do atalho à resposta
 
@@ -47,7 +48,8 @@
 5. **Tarefa longa:** o modelo chama `confirmar_plano`; o app estima os tokens
    pelo histórico e diz quanto da janela de 5 horas já foi usado. Se a
    execução passar do limite, o app para e pergunta se continua.
-6. **Resposta:** aparece no painel e é falada.
+6. **Resposta:** aparece no painel e é falada frase por frase, na voz escolhida
+   em Ajustes, depois de virar texto falável (números por extenso).
 
 ## Privacidade
 

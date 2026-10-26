@@ -15,6 +15,7 @@ import {
   type AppSettings,
 } from "./storage.js";
 import { createVoice, takeSentences, wakeRequest, yesOrNo, type Voice } from "./voice.js";
+import { VOICES, vozArgs } from "./voices.js";
 import { findClaude } from "./claudePath.js";
 
 // The menu bar app: an icon, a global shortcut and a small panel. The
@@ -151,7 +152,13 @@ async function sendStatus() {
       taskBudget: settings.assistant.budgets.tarefa,
     },
     limits: lastLimits.map((w) => ({ ...w, resetsAt: w.resetsAt?.toISOString() ?? null })),
-    voice: { enabled: settings.voice.enabled, available: existsSync(VOZ), wake: settings.voice.wake },
+    voice: {
+      enabled: settings.voice.enabled,
+      available: existsSync(VOZ),
+      wake: settings.voice.wake,
+      tts: settings.voice.tts,
+      voices: VOICES,
+    },
   });
 }
 
@@ -290,6 +297,7 @@ function startVoice() {
     binary: VOZ,
     modelsDir: voiceModelsPath(),
     asr: settings.voice.asr,
+    ttsArgs: vozArgs(settings.voice.tts),
     // Test hooks (see packages/desktop/README): never set in normal use.
     testWakeFile: process.env.ANI_ASSISTENTE_TEST_WAKE_FILE,
     mute: process.env.ANI_ASSISTENTE_MUTE === "1",
@@ -394,10 +402,12 @@ ipcMain.on("ani", (_event, raw: unknown) => {
           ...settings.voice,
           enabled: message.enabled ?? settings.voice.enabled,
           wake: message.wake ?? settings.voice.wake,
+          tts: VOICES.some((v) => v.id === message.tts) ? message.tts! : settings.voice.tts,
         },
       };
       saveSettings(settings);
-      if (message.enabled !== undefined) startVoice();
+      // A new voice means a new `voz` process (it loads one voice at start).
+      if (message.enabled !== undefined || message.tts !== undefined) startVoice();
       else setWatching(true);
       void sendStatus();
       break;

@@ -371,6 +371,24 @@ function settingsView(status: Status | null) {
         { class: "row" },
         h(
           "span",
+          { title: "A voz que responde. As neurais soam mais naturais e baixam o modelo na primeira vez." },
+          "Voz da Ani",
+        ),
+        h(
+          "select",
+          { onchange: (e: Event) => send({ type: "saveVoice", tts: (e.target as HTMLSelectElement).value }) },
+          ...status.voice.voices.map((v) =>
+            h("option", { value: v.id, selected: v.id === status.voice.tts, title: v.note }, v.label),
+          ),
+        ),
+      ),
+    status.voice.available &&
+      status.voice.enabled &&
+      h(
+        "div",
+        { class: "row" },
+        h(
+          "span",
           {
             title: "O microfone fica aberto para ouvir “Ei, Ani”. Tudo acontece neste Mac: nada é gravado nem enviado.",
           },

@@ -94,8 +94,11 @@ valem os termos de cada fornecedor, conferidos antes de o adaptador entrar.
 4. Voz: modelo de fala escolhido por comparação em pt-BR
    ([`bench/stt`](bench/stt/README.md)), atalho global, respostas e
    confirmações faladas, fala por frases, "Ei, Ani" (opcional) e instalador
-   (`pnpm -C packages/desktop package`). ✅ Falta: voz própria.
-5. Outros motores (chave de API; Cursor, depois de conferir os termos dele).
+   (`pnpm -C packages/desktop package`). ✅
+5. Voz própria: vozes neurais comparadas em pt-BR
+   ([`bench/tts`](bench/tts/README.md)), escolha em Ajustes. ✅ Falta: ouvir e
+   escolher a voz padrão.
+6. Outros motores (chave de API; Cursor, depois de conferir os termos dele).
 
 ## Licença
 

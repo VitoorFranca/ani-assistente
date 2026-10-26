@@ -1,7 +1,8 @@
 // swift-tools-version: 6.2
 // voz: the assistant's ears and voice, as one helper process.
 // Speech recognition (Parakeet through FluidAudio, Apache-2.0, pinned) with
-// Silero VAD for the end of speech; speech synthesis with the macOS voices.
+// Silero VAD for the end of speech; speech synthesis with the macOS voices or
+// a neural voice (Supertonic 3, PocketTTS) downloaded on first use.
 import PackageDescription
 
 let package = Package(

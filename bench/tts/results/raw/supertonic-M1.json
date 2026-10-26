@@ -1,0 +1,35 @@
+{
+  "engine": "supertonic",
+  "loadMs": 603.546041,
+  "sentences": [
+    {
+      "audioSec": 6.235102040816327,
+      "file": "1.wav",
+      "firstAudioMs": 55.013416,
+      "synthMs": 55.013416,
+      "text": "Você tem 12 cartões para revisar hoje e acertou 85% ontem."
+    },
+    {
+      "audioSec": 5.591269841269841,
+      "file": "2.wav",
+      "firstAudioMs": 101.403083,
+      "synthMs": 101.403083,
+      "text": "Pronto, criei a nota no baralho Inglês. Quer que eu adicione mais alguma?"
+    },
+    {
+      "audioSec": 7.2077097505668934,
+      "file": "3.wav",
+      "firstAudioMs": 88.083375,
+      "synthMs": 88.083375,
+      "text": "O roadmap de back-end tem oito tópicos; o próximo é Bancos de dados, com três fontes."
+    },
+    {
+      "audioSec": 9.14015873015873,
+      "file": "4.wav",
+      "firstAudioMs": 127.387292,
+      "synthMs": 127.387292,
+      "text": "Essa tarefa deve gastar cerca de 20 mil tokens, uns 4% da sua janela de 5 horas. Posso seguir?"
+    }
+  ],
+  "voice": "M1"
+}

@@ -1,6 +1,10 @@
 // voz: listens (microphone → end of speech → text) and speaks (text → voice).
 //
-//   voz --asr ultra|v3 --models-dir DIR
+//   voz --asr ultra|v3 --models-dir DIR [--tts apple|supertonic|pocket] [--tts-voice NAME] [--mute]
+//
+// Voices (bench/tts compares them): "apple" is the best installed macOS pt-BR
+// voice; "supertonic" is Supertonic 3 (Supertone, OpenRAIL-M) and "pocket" is
+// PocketTTS (Kyutai, CC BY 4.0), both downloaded on first use.
 //
 // Commands on stdin, one JSON object per line:
 //   {"cmd":"listen"}                    microphone until the end of speech (or 30 s)
@@ -10,7 +14,7 @@
 //   {"cmd":"watch","on":true|false}     wake-word mode: transcribe short utterances and report them
 //                                       (the app keeps only the ones that start with the wake word)
 // Events on stdout, one JSON object per line:
-//   ready{loadMs} · listening · level{rms} · speechStart · heard{text,speechMs,asrMs} · nothing · spoken · error{message}
+//   ready{loadMs,asr,tts} · listening · level{rms} · speechStart · heard{text,speechMs,asrMs} · nothing · spoken · error{message}
 //   overheard{text} (watch mode only)
 // Audio never leaves this process: nothing is written to disk or sent anywhere.
 @preconcurrency import AVFoundation
@@ -35,11 +39,14 @@ func fail(_ message: String) -> Never {
 
 // ---- Arguments and models ----
 
-var asrName = "ultra", modelsDir = ""
+var asrName = "ultra", modelsDir = "", ttsName = "apple", ttsVoice: String? = nil, mute = false
 var args = CommandLine.arguments.dropFirst().makeIterator()
 while let a = args.next() {
     if a == "--asr", let v = args.next() { asrName = v }
     if a == "--models-dir", let v = args.next() { modelsDir = v }
+    if a == "--tts", let v = args.next() { ttsName = v }
+    if a == "--tts-voice", let v = args.next() { ttsVoice = v }
+    if a == "--mute" { mute = true }  // tests: the neural voice plays at volume zero
 }
 
 /// Speech in, text out: VAD to find the utterance, Parakeet to transcribe it.
@@ -251,9 +258,16 @@ func fileChunks(_ path: String) throws -> AsyncStream<[Float]> {
     }
 }
 
-// ---- Voice (macOS speech synthesis) ----
+// ---- Voice ----
 
-final class Mouth: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
+/// Says sentences in order; reports "spoken" when each one has finished playing.
+protocol Mouth: AnyObject, Sendable {
+    func speak(_ text: String, voice: String?)
+    func stop()
+}
+
+/// The macOS voices (no download, instant, robotic next to the neural ones).
+final class AppleMouth: NSObject, Mouth, AVSpeechSynthesizerDelegate, @unchecked Sendable {
     private let synthesizer = AVSpeechSynthesizer()
     override init() {
         super.init()
@@ -266,16 +280,122 @@ final class Mouth: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
         return voices.max { $0.quality.rawValue < $1.quality.rawValue } ?? AVSpeechSynthesisVoice(language: "pt-BR")
     }
     func speak(_ text: String, voice name: String?) {
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = voice(named: name)
-        synthesizer.speak(utterance)
+        DispatchQueue.main.async { [self] in
+            let utterance = AVSpeechUtterance(string: text)
+            utterance.voice = voice(named: name)
+            synthesizer.speak(utterance)
+        }
     }
-    func stop() { synthesizer.stopSpeaking(at: .immediate) }
+    func stop() { DispatchQueue.main.async { [self] in synthesizer.stopSpeaking(at: .immediate) } }
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         emit(["type": "spoken"])
     }
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         emit(["type": "spoken", "cancelled": true])
+    }
+}
+
+/// Samples for one sentence, in pieces as they are generated (or all at once).
+typealias Generate = @Sendable (String) async throws -> AsyncThrowingStream<[Float], Error>
+
+/// A neural voice played through AVAudioEngine. Pieces are scheduled on the
+/// player as soon as they exist (PocketTTS yields 80 ms frames, so a sentence
+/// starts about 50 ms after it arrives). One sentence is generated at a time,
+/// in order; the next one is generated while this one plays.
+final class NeuralMouth: Mouth, @unchecked Sendable {
+    private let generate: Generate
+    private let engine = AVAudioEngine()
+    private let player = AVAudioPlayerNode()
+    private let format: AVAudioFormat
+    private let lock = NSLock()
+    private var queue: [String] = []
+    private var worker: Task<Void, Never>?
+    /// Bumped by stop(): buffers and reports from an older generation are dropped.
+    private var generation = 0
+    /// Sentences generated but not yet heard to the end.
+    private var playing = 0
+
+    init(sampleRate: Int, mute: Bool, generate: @escaping Generate) throws {
+        self.generate = generate
+        format = AVAudioFormat(standardFormatWithSampleRate: Double(sampleRate), channels: 1)!
+        engine.attach(player)
+        engine.connect(player, to: engine.mainMixerNode, format: format)
+        if mute { engine.mainMixerNode.outputVolume = 0 }
+        try engine.start()
+    }
+
+    func speak(_ text: String, voice _: String?) {
+        lock.lock()
+        queue.append(text)
+        let idle = worker == nil
+        if idle { worker = Task { await self.drain() } }
+        lock.unlock()
+    }
+
+    private func next() -> (String, Int)? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !queue.isEmpty else {
+            worker = nil
+            return nil
+        }
+        return (queue.removeFirst(), generation)
+    }
+
+    private func current(_ gen: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return gen == generation
+    }
+
+    private func drain() async {
+        while let (text, gen) = next() {
+            if !engine.isRunning { try? engine.start() }
+            player.play()
+            var last: AVAudioPCMBuffer?
+            do {
+                for try await samples in try await generate(text) {
+                    guard current(gen) else { break }
+                    guard let buffer = pcm(samples) else { continue }
+                    if let last { player.scheduleBuffer(last, completionHandler: nil) }
+                    last = buffer
+                }
+            } catch {
+                emit(["type": "error", "message": "voz: \(error.localizedDescription)"])
+            }
+            guard current(gen) else { continue }
+            if let last {
+                // The last frame tells when the whole sentence has been heard.
+                lock.withLock { playing += 1 }
+                player.scheduleBuffer(last, completionCallbackType: .dataPlayedBack) { [self] _ in
+                    guard current(gen) else { return }
+                    lock.withLock { playing -= 1 }
+                    emit(["type": "spoken"])
+                }
+            } else {
+                emit(["type": "spoken"])
+            }
+        }
+    }
+
+    private func pcm(_ samples: [Float]) -> AVAudioPCMBuffer? {
+        guard !samples.isEmpty,
+            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count))
+        else { return nil }
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        samples.withUnsafeBufferPointer { buffer.floatChannelData![0].update(from: $0.baseAddress!, count: samples.count) }
+        return buffer
+    }
+
+    func stop() {
+        lock.lock()
+        let busy = worker != nil || !queue.isEmpty || playing > 0
+        generation += 1
+        queue.removeAll()
+        playing = 0
+        lock.unlock()
+        player.stop()
+        if busy { emit(["type": "spoken", "cancelled": true]) }
     }
 }
 
@@ -294,9 +414,51 @@ do {
 } catch {
     fail("não consegui carregar os modelos de voz: \(error.localizedDescription)")
 }
-let mouth = Mouth()
+/// The requested voice, or the macOS one when it cannot load (the app still talks).
+func loadMouth(_ name: String, voice requested: String?, directory: URL?, mute: Bool) async -> (Mouth, String) {
+    let models = directory?.appendingPathComponent("tts")
+    do {
+        switch name {
+        case "pocket":
+            let voice = requested ?? "alba"
+            let manager = PocketTtsManager(defaultVoice: voice, language: .portuguese, directory: models)
+            try await manager.initialize()
+            _ = try await manager.synthesize(text: "Olá.")  // warm-up: the first call pays the compile
+            let mouth = try NeuralMouth(sampleRate: PocketTtsConstants.audioSampleRate, mute: mute) { text in
+                let frames = try await manager.synthesizeStreaming(text: text, voice: voice)
+                return AsyncThrowingStream { continuation in
+                    let task = Task {
+                        do {
+                            for try await frame in frames { continuation.yield(frame.samples) }
+                            continuation.finish()
+                        } catch { continuation.finish(throwing: error) }
+                    }
+                    continuation.onTermination = { _ in task.cancel() }
+                }
+            }
+            return (mouth, "pocket")
+        case "supertonic":
+            guard let voice = Supertonic3Voice(rawValue: requested ?? "M1") else { throw CocoaError(.featureUnsupported) }
+            let manager = try await Supertonic3Manager.downloadAndCreate(cacheDirectory: models)
+            let style = try await Supertonic3ResourceDownloader.loadVoiceStyle(voice, directory: models)
+            _ = try await manager.synthesize(text: "Olá.", language: "pt", style: style)
+            let mouth = try NeuralMouth(sampleRate: Supertonic3Constants.sampleRate, mute: mute) { text in
+                // About 90 ms for a whole sentence: no need to stream it.
+                let samples = try await manager.synthesize(text: text, language: "pt", style: style).samples
+                return AsyncThrowingStream { $0.yield(samples); $0.finish() }
+            }
+            return (mouth, "supertonic")
+        default:
+            return (AppleMouth(), "apple")
+        }
+    } catch {
+        emit(["type": "error", "message": "voz neural indisponível, usando a do macOS: \(error.localizedDescription)"])
+        return (AppleMouth(), "apple")
+    }
+}
+let (mouth, ttsLoaded) = await loadMouth(ttsName, voice: ttsVoice, directory: directory, mute: mute)
 let microphone = Microphone()
-emit(["type": "ready", "loadMs": Int(Date().timeIntervalSince(started) * 1000), "asr": asrName])
+emit(["type": "ready", "loadMs": Int(Date().timeIntervalSince(started) * 1000), "asr": asrName, "tts": ttsLoaded])
 
 func hear(_ chunks: AsyncStream<[Float]>, capture: Int? = nil) {
     Task {
@@ -344,9 +506,9 @@ func handle(_ line: String) {
         Task { await ears.cancel() }
         microphone.stop()
     case "speak":
-        DispatchQueue.main.async { mouth.speak(command["text"] as? String ?? "", voice: command["voice"] as? String) }
+        mouth.speak(command["text"] as? String ?? "", voice: command["voice"] as? String)
     case "stopSpeaking":
-        DispatchQueue.main.async { mouth.stop() }
+        mouth.stop()
     default:
         emit(["type": "error", "message": "comando desconhecido: \(cmd)"])
     }

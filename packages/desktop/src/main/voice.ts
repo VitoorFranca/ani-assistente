@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
+import { spokenText } from "./spoken.js";
 
 // The app side of the `voz` helper (native/voz): start it once, then ask it
 // to listen or speak. One request at a time for each.
@@ -19,6 +20,8 @@ export interface VoiceOptions {
   binary: string;
   modelsDir: string;
   asr: "ultra" | "v3";
+  /** Extra `voz` arguments for the voice that answers (voices.ts). */
+  ttsArgs?: string[];
   onEvent?: (event: VoiceEvent) => void;
   /** Tests only: the wake-word mode reads this WAV instead of the microphone. */
   testWakeFile?: string;
@@ -34,9 +37,13 @@ export function createVoice(options: VoiceOptions) {
   function start(): Promise<void> {
     if (ready) return ready;
     ready = new Promise((resolve, reject) => {
-      child = spawn(options.binary, ["--asr", options.asr, "--models-dir", options.modelsDir], {
-        stdio: ["pipe", "pipe", "pipe"],
-      });
+      child = spawn(
+        options.binary,
+        ["--asr", options.asr, "--models-dir", options.modelsDir, ...(options.ttsArgs ?? [])],
+        {
+          stdio: ["pipe", "pipe", "pipe"],
+        },
+      );
       child.on("error", (error) => reject(error));
       child.on("exit", () => {
         child = null;
@@ -96,7 +103,7 @@ export function createVoice(options: VoiceOptions) {
       if (!text.trim() || options.mute) return;
       await start();
       const done = until((e) => (e.type === "spoken" ? true : undefined));
-      command({ cmd: "speak", text });
+      command({ cmd: "speak", text: spokenText(text) });
       await done;
     },
     /**
@@ -122,7 +129,7 @@ export function createVoice(options: VoiceOptions) {
           if (options.mute) {
             options.onEvent?.({ type: "spoken" });
             listener({ type: "spoken" });
-          } else command({ cmd: "speak", text: sentence });
+          } else command({ cmd: "speak", text: spokenText(sentence) });
         },
         async finished() {
           if (spoken < queued) await new Promise<void>((resolve) => (wake = resolve));

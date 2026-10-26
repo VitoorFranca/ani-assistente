@@ -132,8 +132,8 @@ Implementados no ANI-9 para este projeto:
 
 **Escolhido:** `native/voz`, um executável Swift com o FluidAudio (Apache-2.0,
 mesmo commit do spokemark): microfone (AVAudioEngine) → Silero VAD (fim da
-fala com 600 ms de silêncio) → **Parakeet Ultra** → texto. A fala usa as vozes
-pt-BR do macOS (a melhor instalada).
+fala com 600 ms de silêncio) → **Parakeet Ultra** → texto. A resposta sai pela
+voz escolhida em Ajustes (veja "Voz da Ani").
 
 Comparação completa em [`bench/stt`](../bench/stt/README.md). Resumo (MacBook
 Air M4, FLEURS pt_br com 100 frases e 24 comandos):
@@ -182,6 +182,35 @@ A resposta é dividida em frases enquanto chega, e cada frase vai para a
 síntese de voz assim que termina (a síntese enfileira). Frases muito curtas
 ("Pronto.") esperam a seguinte; decimais ("3.5") não cortam. Com isso, a voz
 começa ao fim da primeira frase, não da resposta inteira.
+
+## Voz da Ani: macOS por padrão, Supertonic 3 como voz neural
+
+Comparação em [`bench/tts`](../bench/tts/README.md) (MacBook Air M4). Cada voz
+leu as mesmas frases, e o Parakeet transcreveu o áudio de volta para medir se
+as palavras saem certas:
+
+| Voz                      | Primeiro som | Memória | Erro (FLEURS, 100 frases) |
+| ------------------------ | ------------ | ------- | ------------------------- |
+| macOS Luciana            | 8 ms         | 55 MB   | 6,0%                      |
+| Supertonic 3             | 95 ms        | 115 MB  | 6,9–7,0%                  |
+| PocketTTS pt (6 camadas) | 50–66 ms     | 740 MB  | 9,3–9,9%                  |
+
+- O app oferece as três em Ajustes. O padrão continua sendo a voz do macOS
+  (sem download, instantânea), até alguém ouvir e escolher: naturalidade não
+  se mede por transcrição.
+- O Supertonic é a voz neural recomendada: erra quase igual à do macOS e usa
+  um sexto da memória do PocketTTS. O PocketTTS fica como opção.
+- Chatterbox (13 s por frase, 2,7 GB) e PocketTTS de 24 camadas (1,8 GB) foram
+  descartados. O Kokoro não tem português no FluidAudio.
+- Antes de falar, cada frase passa por `spokenText()`: números por extenso,
+  "%" como "por cento", ";" como vírgula. Sem isso, o PocketTTS leu "20 mil"
+  como "2 mil".
+- As vozes neurais tocam pelo AVAudioEngine dentro do `voz`, uma frase por vez
+  (a seguinte é gerada enquanto a atual toca). Se a voz escolhida não carregar,
+  o `voz` avisa e usa a do macOS.
+- Os modelos são baixados do Hugging Face na primeira vez e não vão no app:
+  Supertonic 3 (Supertone, OpenRAIL-M, com restrições de uso) e PocketTTS
+  (Kyutai, CC BY 4.0).
 
 ## Sessão viva: o motor aquece enquanto a pessoa fala
 
